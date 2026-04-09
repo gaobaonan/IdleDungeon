@@ -1,5 +1,6 @@
 package com.example.idledungeon.ui.screen
 
+import android.graphics.Paint as NativePaint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
@@ -13,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.example.idledungeon.model.*
@@ -30,7 +32,8 @@ fun DungeonScreen(
     expedition: ExpeditionSession?,
     deepestFloor: Int,
     onDepart: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onDebugRefresh: (() -> Unit)? = null  // [DEBUG] 发布前删除
 ) {
     Scaffold(
         topBar = {
@@ -39,6 +42,15 @@ fun DungeonScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // [DEBUG] 刷新地图按钮 — 发布前删除
+                    if (onDebugRefresh != null) {
+                        IconButton(onClick = onDebugRefresh) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Refresh")
+                            Text("Re", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             )
@@ -94,7 +106,7 @@ private fun DungeonMapCanvas(floor: DungeonFloor, expedition: ExpeditionSession?
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.5f, 3f)
+                    scale = (scale * zoom).coerceIn(0.8f, 5f)
                     offset += pan
                 }
             }
@@ -105,30 +117,66 @@ private fun DungeonMapCanvas(floor: DungeonFloor, expedition: ExpeditionSession?
                 translationY = offset.y
             }
     ) {
-        val cellSize = 24.dp.toPx()
+        // 自动缩放: 让整张地图刚好填满屏幕
+        val cellSize = minOf(size.width / floor.width, size.height / floor.height)
+        val gap = (cellSize * 0.08f).coerceAtMost(2f)
+
+        val textPaint = NativePaint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = cellSize * 0.45f
+            textAlign = NativePaint.Align.CENTER
+            isFakeBoldText = true
+        }
+
         for (y in floor.grid.indices) {
             for (x in floor.grid[y].indices) {
                 val node = floor.grid[y][x]
-                val color = when {
-                    !node.explored -> Color.DarkGray          // 迷雾
-                    node.type == NodeType.WALL -> Color.Black
-                    node.type == NodeType.CORRIDOR -> Color.LightGray
-                    node.type == NodeType.ROOM -> Color(0xFFBB9955)
-                    node.type == NodeType.BOSS_ROOM -> Color.Red.copy(alpha = 0.6f)
-                    node.type == NodeType.STAIRS -> Color.Cyan
-                    else -> Color.Gray
+                val rawLabel = node.label
+                val isVisited = rawLabel.startsWith("v")
+                val displayLabel = if (isVisited) rawLabel.removePrefix("v") else rawLabel
+                val hasLabel = displayLabel.isNotEmpty()
+
+                val color = if (!node.explored) {
+                    Color(0xFF555565)                                     // 迷雾: 中灰
+                } else when (node.type) {
+                    NodeType.WALL -> Color(0xFF1A1A2E)                   // 墙壁: 深蓝黑
+                    NodeType.ROOM,
+                    NodeType.CORRIDOR -> when {
+                        hasLabel && isVisited -> Color(0xFFDD9933)        // 已探索房间: 亮橙
+                        hasLabel -> Color(0xFF776644)                     // 未探索房间: 暗橙
+                        else -> Color(0xFFB0B0B8)                        // 走廊: 灰白
+                    }
+                    NodeType.BOSS_ROOM ->
+                        if (isVisited) Color(0xFFCC3333) else Color(0xFF882222) // Boss
+                    NodeType.STAIRS -> when (node.event) {
+                        NodeEvent.STAIRS_UP -> Color(0xFF33AACC)
+                        NodeEvent.STAIRS_DOWN -> Color(0xFF3366CC)
+                        else -> Color.Cyan
+                    }
                 }
+
                 drawRect(
                     color = color,
                     topLeft = Offset(x * cellSize, y * cellSize),
-                    size = Size(cellSize - 2.dp.toPx(), cellSize - 2.dp.toPx())
+                    size = Size(cellSize - gap, cellSize - gap)
                 )
-                // 绘制队伍位置
+
+                // 绿点: 队伍位置
                 if (expedition != null && expedition.posX == x && expedition.posY == y) {
                     drawCircle(
                         color = Color.Green,
-                        radius = cellSize / 4,
+                        radius = cellSize / 3,
                         center = Offset(x * cellSize + cellSize / 2, y * cellSize + cellSize / 2)
+                    )
+                }
+
+                // [DEBUG] 房间编号 (已揭示时显示)
+                if (hasLabel && node.explored) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        displayLabel,
+                        x * cellSize + cellSize / 2,
+                        y * cellSize + cellSize / 2 + textPaint.textSize / 3,
+                        textPaint
                     )
                 }
             }

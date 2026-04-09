@@ -170,14 +170,18 @@ fun MainApp() {
                 expedition = state.expedition,
                 deepestFloor = state.gameState.deepestFloorReached,
                 onDepart = { navController.navigateSafe(Route.PARTY_SETUP) },
-                onBack = { navController.popBackStackSafe() }
+                onBack = { navController.popBackStackSafe() },
+                onDebugRefresh = { vm.debugPreviewMap() }  // [DEBUG] 发布前删除
             )
         }
 
         composable(Route.PARTY_SETUP) {
             PartySetupScreen(
                 party = state.partySlots,
-                availableHeroes = state.heroes.filter { it.status == com.example.idledungeon.model.HeroStatus.IDLE },
+                availableHeroes = state.heroes.filter { hero ->
+                    hero.status == com.example.idledungeon.model.HeroStatus.IDLE &&
+                    state.partySlots.none { it.heroId == hero.id }
+                },
                 allHeroes = state.heroes.associateBy { it.id },
                 onAddToParty = { id, pos -> vm.addToParty(id, pos) },
                 onRemoveFromParty = { vm.removeFromParty(it) },

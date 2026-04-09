@@ -13,8 +13,8 @@ import kotlinx.coroutines.flow.update
 class ExplorationEngine {
 
     companion object {
-        /** 每层基础推进间隔 (毫秒) */
-        private const val BASE_INTERVAL_MS = 10_000L
+        /** 每层基础推进间隔 (毫秒) — 测试用 1 秒 */
+        private const val BASE_INTERVAL_MS = 1_000L
         /** 补给消耗: 普通格 / 陷阱格 / 战斗格 */
         private const val SUPPLY_NORMAL = 1
         private const val SUPPLY_TRAP = 3
@@ -32,8 +32,14 @@ class ExplorationEngine {
         val floor = state.currentFloor ?: DungeonGenerator.generate(layer)
         stateFlow.update { it.copy(currentFloor = floor) }
 
+        // 找到楼梯上行位置作为起始点
+        val startPos = findStairsUp(floor)
         val interval = BASE_INTERVAL_MS * layer // 更深层 = 更慢
-        var currentSession = session.copy(isExploring = true)
+        var currentSession = session.copy(
+            isExploring = true,
+            posX = startPos.first,
+            posY = startPos.second
+        )
         var currentFloor = floor
 
         // 简单的寻路: 从当前位置向楼梯方向移动
@@ -111,11 +117,12 @@ class ExplorationEngine {
                 NodeEvent.STAIRS_DOWN -> {
                     supplyCost = SUPPLY_NORMAL
                     log.add("Found stairs down / 发现下行楼梯！")
-                    // 生成下一层
+                    // 生成下一层，入口位置 = 当前下楼梯位置
                     val newLayer = currentSession.currentLayer + 1
-                    currentFloor = DungeonGenerator.generate(newLayer)
+                    currentFloor = DungeonGenerator.generate(newLayer, entryX = nx, entryY = ny)
+                    val newStart = findStairsUp(currentFloor)
                     currentSession = currentSession.copy(
-                        currentLayer = newLayer, posX = 0, posY = 0
+                        currentLayer = newLayer, posX = newStart.first, posY = newStart.second
                     )
                 }
                 NodeEvent.STAIRS_UP -> {
@@ -154,6 +161,24 @@ class ExplorationEngine {
                 }
             }
         }
+    }
+
+    /**
+     * 找到楼梯上行位置作为起始点；找不到则回退到第一个房间格子
+     */
+    private fun findStairsUp(floor: DungeonFloor): Pair<Int, Int> {
+        for (y in floor.grid.indices) {
+            for (x in floor.grid[y].indices) {
+                if (floor.grid[y][x].event == NodeEvent.STAIRS_UP) return x to y
+            }
+        }
+        // 回退: 找第一个非墙壁格子
+        for (y in floor.grid.indices) {
+            for (x in floor.grid[y].indices) {
+                if (floor.grid[y][x].type != NodeType.WALL) return x to y
+            }
+        }
+        return 0 to 0
     }
 
     /**

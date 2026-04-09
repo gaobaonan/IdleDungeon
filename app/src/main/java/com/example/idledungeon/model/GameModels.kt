@@ -135,8 +135,8 @@ data class Hero(
 data class PlayerGuild(
     val guildRank: String = "F",
     val gold: Int = 0,
-    val currentSupplies: Int = 100,
-    val maxSupplies: Int = 100,         // 公会等级决定上限
+    val currentSupplies: Int = 10000,    // 测试用大补给
+    val maxSupplies: Int = 10000,       // 公会等级决定上限
     val maxCarryItems: Int = 10,        // 探险可携带道具上限
     val guildLevel: Int = 1,
     val tavernLevel: Int = 1,
@@ -167,7 +167,8 @@ data class DungeonNode(
     val event: NodeEvent = NodeEvent.NONE,
     val monsterIds: List<String> = emptyList(),
     val lootTable: Map<String, Int> = emptyMap(),
-    val explored: Boolean = false
+    val explored: Boolean = false,
+    val label: String = ""              // [DEBUG] 房间编号，发布前删除
 )
 
 /** 地牢楼层 - 一层 = 一个二维网格 */

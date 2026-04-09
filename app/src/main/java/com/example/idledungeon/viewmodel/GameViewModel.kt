@@ -6,6 +6,8 @@ import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.MonsterRegistry
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -194,6 +196,156 @@ class GameViewModel : ViewModel() {
                       else current
             state.copy(carriedItemIds = new)
         }
+    }
+
+    // ============================
+    // [DEBUG] 地图测试 — 发布前删除
+    // ============================
+
+    private var debugWalkJob: Job? = null
+    private val debugVisitedRooms = mutableSetOf<Pair<Int, Int>>()
+
+    fun debugPreviewMap() {
+        debugWalkJob?.cancel()
+        debugVisitedRooms.clear()
+
+        val floor = com.example.idledungeon.engine.DungeonGenerator.generate(layer = 1)
+
+        // 找楼梯上行作为起点
+        var sx = 0; var sy = 0
+        for (y in floor.grid.indices) for (x in floor.grid[y].indices) {
+            if (floor.grid[y][x].event == NodeEvent.STAIRS_UP) { sx = x; sy = y }
+        }
+
+        debugVisitedRooms.add(sx to sy)
+        val revealedFloor = revealVisibility(floor, sx, sy)
+        val expedition = ExpeditionSession(
+            dungeonId = "debug", party = emptyList(),
+            currentSupply = 99999, isExploring = true, posX = sx, posY = sy
+        )
+        _uiState.update { it.copy(currentFloor = revealedFloor, expedition = expedition) }
+
+        // 启动 BFS 驱动的自动行走
+        debugWalkJob = viewModelScope.launch {
+            delay(400)
+            var steps = 0
+            while (steps < 800) {
+                steps++
+                val state = _uiState.value
+                val curFloor = state.currentFloor ?: break
+                val exp = state.expedition ?: break
+
+                val next = debugBfsNextStep(curFloor, exp.posX, exp.posY) ?: break
+                val (nx, ny) = next
+                val node = curFloor.grid[ny][nx]
+
+                // 抵达房间/Boss/楼梯 → 标记为已探索
+                val isRoom = (node.label.isNotEmpty() && node.type == NodeType.CORRIDOR)
+                    || node.type == NodeType.BOSS_ROOM || node.event == NodeEvent.STAIRS_DOWN
+                if (isRoom) debugVisitedRooms.add(nx to ny)
+
+                val reachedEnd = node.event == NodeEvent.STAIRS_DOWN
+                var newFloor = revealVisibility(curFloor, nx, ny)
+
+                // 标记已探索房间 (label 加 "v" 前缀供渲染区分)
+                if (isRoom && !node.label.startsWith("v")) {
+                    val g = newFloor.grid.mapIndexed { gy, row ->
+                        row.mapIndexed { gx, n ->
+                            if (gx == nx && gy == ny) n.copy(label = "v" + n.label) else n
+                        }
+                    }
+                    newFloor = newFloor.copy(grid = g)
+                }
+
+                _uiState.update {
+                    it.copy(currentFloor = newFloor, expedition = exp.copy(posX = nx, posY = ny, isExploring = !reachedEnd))
+                }
+                if (reachedEnd) break
+                delay(150)
+            }
+        }
+    }
+
+    /** BFS 寻路: 优先找最近的未探索房间，其次找迷雾边界 (frontier)，返回路径上的第一步 */
+    private fun debugBfsNextStep(floor: DungeonFloor, cx: Int, cy: Int): Pair<Int, Int>? {
+        val queue = ArrayDeque<Pair<Int, Int>>()
+        val prev = mutableMapOf<Pair<Int, Int>, Pair<Int, Int>>()
+        val seen = mutableSetOf(cx to cy)
+        queue.add(cx to cy)
+
+        var roomTarget: Pair<Int, Int>? = null
+        var frontierTarget: Pair<Int, Int>? = null
+
+        while (queue.isNotEmpty()) {
+            val (x, y) = queue.removeFirst()
+            if (x != cx || y != cy) {
+                val node = floor.grid[y][x]
+                // 优先级 1: 未探索的房间/Boss/下楼梯
+                val isTarget = ((node.label.isNotEmpty() && !node.label.startsWith("v") && node.type == NodeType.CORRIDOR)
+                    || (node.type == NodeType.BOSS_ROOM && (x to y) !in debugVisitedRooms)
+                    || node.event == NodeEvent.STAIRS_DOWN) && (x to y) !in debugVisitedRooms
+                if (isTarget) { roomTarget = x to y; break }
+
+                // 优先级 2: 迷雾边界 (已揭示的走廊，旁边有未揭示的非墙格)
+                if (frontierTarget == null) {
+                    val isFrontier = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0).any { (dx, dy) ->
+                        val nx = x + dx; val ny = y + dy
+                        ny in floor.grid.indices && nx in floor.grid[0].indices
+                            && !floor.grid[ny][nx].explored && floor.grid[ny][nx].type != NodeType.WALL
+                    }
+                    if (isFrontier) frontierTarget = x to y
+                }
+            }
+            for ((dx, dy) in listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)) {
+                val nx = x + dx; val ny = y + dy
+                if (ny !in floor.grid.indices || nx !in floor.grid[0].indices) continue
+                if ((nx to ny) in seen) continue
+                val adj = floor.grid[ny][nx]
+                if (adj.type == NodeType.WALL || !adj.explored) continue
+                seen.add(nx to ny)
+                prev[nx to ny] = x to y
+                queue.add(nx to ny)
+            }
+        }
+
+        val target = roomTarget ?: frontierTarget ?: return null
+        // 回溯路径，取第一步
+        var step = target
+        while (true) {
+            val p = prev[step] ?: return step
+            if (p.first == cx && p.second == cy) return step
+            step = p
+        }
+    }
+
+    /** 视野计算: 从 (px,py) 向四方投射直线，房间/Boss房/墙壁阻挡。每个可见格驱散 3×3 迷雾。 */
+    private fun revealVisibility(floor: DungeonFloor, px: Int, py: Int): DungeonFloor {
+        val visible = mutableSetOf(px to py)
+        for ((dx, dy) in listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)) {
+            var i = 1
+            while (true) {
+                val nx = px + dx * i; val ny = py + dy * i
+                if (ny !in floor.grid.indices || nx !in floor.grid[0].indices) break
+                val node = floor.grid[ny][nx]
+                visible.add(nx to ny)
+                if (node.type == NodeType.WALL || node.type == NodeType.BOSS_ROOM) break
+                if (node.type == NodeType.CORRIDOR && node.label.isNotEmpty()) break
+                i++
+            }
+        }
+        val toReveal = mutableSetOf<Pair<Int, Int>>()
+        for ((vx, vy) in visible) {
+            for (dy in -1..1) for (dx in -1..1) {
+                val nx = vx + dx; val ny = vy + dy
+                if (ny in floor.grid.indices && nx in floor.grid[0].indices) toReveal.add(nx to ny)
+            }
+        }
+        val newGrid = floor.grid.mapIndexed { y, row ->
+            row.mapIndexed { x, node ->
+                if ((x to y) in toReveal && !node.explored) node.copy(explored = true) else node
+            }
+        }
+        return floor.copy(grid = newGrid)
     }
 
     // ============================

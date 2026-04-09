@@ -89,16 +89,37 @@ fun PartySetupScreen(
             Text("Available Heroes / 可选冒险者", style = MaterialTheme.typography.titleSmall)
 
             // ── 可选列表 ──
+            val frontCount = party.count { it.position == Position.FRONT }
+            val backCount = party.count { it.position == Position.BACK }
+
             LazyColumn {
                 items(availableHeroes) { hero ->
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                            .clickable { onAddToParty(hero.id, Position.FRONT) }
                     ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(Icons.Default.Person, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text("${hero.name}  Lv.${hero.level}  ATK:${hero.attack}")
+                            Text(
+                                "${hero.name}  Lv.${hero.level}  ATK:${hero.attack}",
+                                modifier = Modifier.weight(1f)
+                            )
+                            FilledTonalButton(
+                                onClick = { onAddToParty(hero.id, Position.FRONT) },
+                                enabled = frontCount < 2,
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) { Text("Front/前排") }
+                            Spacer(Modifier.width(4.dp))
+                            FilledTonalButton(
+                                onClick = { onAddToParty(hero.id, Position.BACK) },
+                                enabled = backCount < 2,
+                                contentPadding = PaddingValues(horizontal = 8.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) { Text("Back/后排") }
                         }
                     }
                 }
