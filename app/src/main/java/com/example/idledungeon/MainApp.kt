@@ -1,15 +1,40 @@
 package com.example.idledungeon
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.idledungeon.ui.navigation.Route
 import com.example.idledungeon.ui.screen.*
 import com.example.idledungeon.viewmodel.GameViewModel
+
+/**
+ * 全局导航节流：lifecycle 检查 + 时间防抖，防止动画期间重复导航
+ */
+private var lastNavTime = 0L
+private const val NAV_DEBOUNCE_MS = 300L
+
+private fun NavController.navigateSafe(route: String, builder: (androidx.navigation.NavOptionsBuilder.() -> Unit)? = null) {
+    val now = System.currentTimeMillis()
+    if (now - lastNavTime < NAV_DEBOUNCE_MS) return
+    if (currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) != true) return
+    lastNavTime = now
+    if (builder != null) navigate(route, builder) else navigate(route)
+}
+
+private fun NavController.popBackStackSafe(): Boolean {
+    val now = System.currentTimeMillis()
+    if (now - lastNavTime < NAV_DEBOUNCE_MS) return false
+    if (currentBackStackEntry?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) != true) return false
+    lastNavTime = now
+    return popBackStack()
+}
 
 /**
  * 主程序入口 - Navigation Host
@@ -27,10 +52,10 @@ fun MainApp() {
         composable(Route.START) {
             StartScreen(
                 hasExistingSave = state.gameState.hasStarted,
-                onContinue = { navController.navigate(Route.TOWN) { popUpTo(Route.START) { inclusive = true } } },
+                onContinue = { navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } } },
                 onNewGame = {
-                    vm.startNewGame()
-                    navController.navigate(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
+                    vm.requestNewGame()
+                    navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
                 },
                 onExit = { /* 由 Activity 处 */ }
             )
@@ -38,17 +63,18 @@ fun MainApp() {
 
         // ── 城镇主界面 ──
         composable(Route.TOWN) {
+            LaunchedEffect(Unit) { vm.executePendingNewGame() }
             TownScreen(
                 playerName = state.gameState.playerName,
                 gold = state.gameState.guild.gold,
-                onGuildClick = { navController.navigate(Route.GUILD) },
-                onTavernClick = { navController.navigate(Route.TAVERN) },
-                onBlacksmithClick = { navController.navigate(Route.BLACKSMITH) },
-                onItemShopClick = { navController.navigate(Route.ITEM_SHOP) },
-                onGateClick = { navController.navigate(Route.DUNGEON) },
-                onRosterClick = { navController.navigate(Route.ROSTER) },
-                onInventoryClick = { navController.navigate(Route.INVENTORY) },
-                onBestiaryClick = { navController.navigate(Route.BESTIARY) }
+                onGuildClick = { navController.navigateSafe(Route.GUILD) },
+                onTavernClick = { navController.navigateSafe(Route.TAVERN) },
+                onBlacksmithClick = { navController.navigateSafe(Route.BLACKSMITH) },
+                onItemShopClick = { navController.navigateSafe(Route.ITEM_SHOP) },
+                onGateClick = { navController.navigateSafe(Route.DUNGEON) },
+                onRosterClick = { navController.navigateSafe(Route.ROSTER) },
+                onInventoryClick = { navController.navigateSafe(Route.INVENTORY) },
+                onBestiaryClick = { navController.navigateSafe(Route.BESTIARY) }
             )
         }
 
@@ -61,7 +87,7 @@ fun MainApp() {
                 quests = state.quests,
                 investCost = vm.getInvestCost("guild"),
                 onInvest = { vm.invest("guild") },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -70,10 +96,10 @@ fun MainApp() {
                 tavernLevel = state.gameState.guild.tavernLevel,
                 recruitableHeroes = state.recruitableHeroes,
                 investCost = vm.getInvestCost("tavern"),
-                onHeroClick = { navController.navigate(Route.heroDetail(it)) },
+                onHeroClick = { navController.navigateSafe(Route.heroDetail(it)) },
                 onRecruit = { vm.recruitHero(it) },
                 onInvest = { vm.invest("tavern") },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -84,7 +110,7 @@ fun MainApp() {
                 investCost = vm.getInvestCost("blacksmith"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("blacksmith") },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -95,7 +121,7 @@ fun MainApp() {
                 investCost = vm.getInvestCost("item_shop"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("item_shop") },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -103,8 +129,8 @@ fun MainApp() {
         composable(Route.ROSTER) {
             RosterScreen(
                 heroes = state.heroes,
-                onHeroClick = { navController.navigate(Route.heroDetail(it)) },
-                onBack = { navController.popBackStack() }
+                onHeroClick = { navController.navigateSafe(Route.heroDetail(it)) },
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -113,7 +139,7 @@ fun MainApp() {
             val hero = state.heroes.find { it.id == heroId } ?: return@composable
             HeroDetailScreen(
                 hero = hero,
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popBackStackSafe() },
                 onEditName = { /* TODO: 弹出对话框 */ },
                 onEditPortrait = { /* TODO: 调用图片选择器 */ },
                 onChangeClass = { /* TODO: 弹出职业选择 */ },
@@ -125,7 +151,7 @@ fun MainApp() {
             InventoryScreen(
                 items = state.inventory,
                 onItemClick = { /* TODO: 弹出物品详情 */ },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -133,7 +159,7 @@ fun MainApp() {
             BestiaryScreen(
                 entries = state.codexEntries,
                 onMonsterClick = { /* TODO: 怪物详情 */ },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -143,8 +169,8 @@ fun MainApp() {
                 floor = state.currentFloor,
                 expedition = state.expedition,
                 deepestFloor = state.gameState.deepestFloorReached,
-                onDepart = { navController.navigate(Route.PARTY_SETUP) },
-                onBack = { navController.popBackStack() }
+                onDepart = { navController.navigateSafe(Route.PARTY_SETUP) },
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -155,8 +181,8 @@ fun MainApp() {
                 allHeroes = state.heroes.associateBy { it.id },
                 onAddToParty = { id, pos -> vm.addToParty(id, pos) },
                 onRemoveFromParty = { vm.removeFromParty(it) },
-                onNext = { navController.navigate(Route.TACTIC_SETUP) },
-                onBack = { navController.popBackStack() }
+                onNext = { navController.navigateSafe(Route.TACTIC_SETUP) },
+                onBack = { navController.popBackStackSafe() }
             )
         }
 
@@ -172,7 +198,7 @@ fun MainApp() {
                     vm.startExpedition()
                     navController.popBackStack(Route.DUNGEON, inclusive = false)
                 },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStackSafe() }
             )
         }
     }

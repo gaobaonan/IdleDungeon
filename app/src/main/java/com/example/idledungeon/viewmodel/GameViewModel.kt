@@ -22,10 +22,21 @@ class GameViewModel : ViewModel() {
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
     private val explorationEngine = ExplorationEngine()
+    private var pendingNewGame = false
 
     // ============================
     // 游戏存档
     // ============================
+
+    /** 标记需要开始新游戏，延迟到 Town 页面加载后执行，避免 StartScreen 动画中闪现"继续"按钮 */
+    fun requestNewGame() { pendingNewGame = true }
+
+    fun executePendingNewGame() {
+        if (pendingNewGame) {
+            pendingNewGame = false
+            startNewGame()
+        }
+    }
 
     fun startNewGame() {
         _uiState.update {
