@@ -32,7 +32,7 @@ fun MainApp() {
                     vm.startNewGame()
                     navController.navigate(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
                 },
-                onExit = { /* 由 Activity 处理 */ }
+                onExit = { /* 由 Activity 处 */ }
             )
         }
 
