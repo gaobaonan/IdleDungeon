@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.MonsterRegistry
+import com.example.idledungeon.data.SpellRegistry
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
 import kotlinx.coroutines.Job
@@ -96,6 +97,9 @@ class GameViewModel : ViewModel() {
     // 商店刷新
     // ============================
 
+    /** [DEBUG] 手动刷新商店 */
+    fun debugRefreshShops() = refreshShops()
+
     private fun refreshShops() {
         _uiState.update { state ->
             val guild = state.gameState.guild
@@ -113,6 +117,46 @@ class GameViewModel : ViewModel() {
             val heroClass = HeroClass.entries.random()
             val level = (1..tavernLevel * 3).random()
             val baseHp = 50 + level * 10
+
+            // 主属性高 (8~14+level)，副属性低 (2~5+level/2)
+            fun primary() = (8..14 + level).random()
+            fun secondary() = (2..5 + level / 2).random()
+
+            val stats = when (heroClass) {
+                //                        STR         DEX         INT         FTH
+                HeroClass.WARRIOR -> mapOf(
+                    StatType.STR to primary(),
+                    StatType.DEX to secondary(),
+                    StatType.INT to secondary(),
+                    StatType.FTH to secondary()
+                )
+                HeroClass.RANGER -> mapOf(
+                    StatType.STR to secondary(),
+                    StatType.DEX to primary(),
+                    StatType.INT to secondary(),
+                    StatType.FTH to secondary()
+                )
+                HeroClass.MAGE -> mapOf(
+                    StatType.STR to secondary(),
+                    StatType.DEX to secondary(),
+                    StatType.INT to primary(),
+                    StatType.FTH to secondary()
+                )
+                HeroClass.CLERIC -> mapOf(
+                    StatType.STR to secondary(),
+                    StatType.DEX to secondary(),
+                    StatType.INT to secondary(),
+                    StatType.FTH to primary()
+                )
+                HeroClass.NOVICE -> mapOf(
+                    StatType.STR to (5..8 + level).random(),
+                    StatType.DEX to (5..8 + level).random(),
+                    StatType.INT to (5..8 + level).random(),
+                    StatType.FTH to (5..8 + level).random()
+                )
+            }
+
+            val spells = SpellRegistry.computeSpells(stats, level)
             Hero(
                 id = "recruit_$i",
                 name = "Adventurer ${i + 1} / 冒险者${i + 1}",
@@ -121,12 +165,8 @@ class GameViewModel : ViewModel() {
                 level = level,
                 currentHp = baseHp, maxHp = baseHp,
                 currentMp = 20 + level * 3, maxMp = 20 + level * 3,
-                baseStats = mapOf(
-                    StatType.STR to (5..10 + level).random(),
-                    StatType.DEX to (5..10 + level).random(),
-                    StatType.INT to (5..10 + level).random(),
-                    StatType.FTH to (5..10 + level).random()
-                )
+                baseStats = stats,
+                spells = spells
             )
         }
     }
@@ -154,13 +194,130 @@ class GameViewModel : ViewModel() {
 
     fun buyItem(itemId: String) {
         _uiState.update { state ->
-            val item = ItemRegistry.get(itemId)
-            val cost = item.sellPrice * 2
+            val item = state.shopEquipments.find { it.id == itemId }
+                ?: state.shopConsumables.find { it.id == itemId }
+                ?: return@update state
+            val cost = item.baseValue   // 购买价 = baseValue (售出价 = sellPrice = baseValue/2)
             val guild = state.gameState.guild
             if (guild.gold < cost) return@update state
             state.copy(
                 inventory = state.inventory + item,
+                shopEquipments = state.shopEquipments.filterNot { it.id == itemId },
+                shopConsumables = state.shopConsumables.filterNot { it.id == itemId },
                 gameState = state.gameState.copy(guild = guild.copy(gold = guild.gold - cost))
+            )
+        }
+    }
+
+    // ============================
+    // 装备管理
+    // ============================
+
+    /** 检查英雄是否满足物品的属性需求 */
+    fun meetsRequirements(hero: Hero, item: Item): Boolean {
+        return item.statRequirements.all { (stat, req) ->
+            (hero.baseStats[stat] ?: 0) >= req
+        }
+    }
+
+    /** 装备物品: 从仓库取出 → 装到英雄身上 (旧装备退回仓库) */
+    fun equipItem(heroId: String, item: Item) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            val slot = item.equipSlot ?: return@update state
+            if (!meetsRequirements(hero, item)) return@update state
+
+            // 旧装备退回仓库
+            val oldItem = hero.equipment[slot]
+            val newEquipment = hero.equipment + (slot to item)
+            val newHero = hero.copy(equipment = newEquipment)
+
+            var newInventory = state.inventory.toMutableList()
+            // 移除仓库中该物品 (只移除一件)
+            val idx = newInventory.indexOfFirst { it.id == item.id }
+            if (idx >= 0) newInventory.removeAt(idx)
+            // 旧装备入库
+            if (oldItem != null) newInventory.add(oldItem)
+
+            state.copy(
+                heroes = state.heroes.map { if (it.id == heroId) newHero else it },
+                inventory = newInventory
+            )
+        }
+    }
+
+    /** 卸下装备: 从英雄身上取下 → 退回仓库 */
+    fun unequipItem(heroId: String, slot: EquipSlot) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            val item = hero.equipment[slot] ?: return@update state
+            val newHero = hero.copy(equipment = hero.equipment - slot)
+            state.copy(
+                heroes = state.heroes.map { if (it.id == heroId) newHero else it },
+                inventory = state.inventory + item
+            )
+        }
+    }
+
+    // ============================
+    // 属性点分配
+    // ============================
+
+    /** 消耗 1 属性点，加 1 点指定属性 */
+    fun allocateStatPoint(heroId: String, stat: StatType) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            if (hero.unspentStatPoints <= 0) return@update state
+            val newStats = hero.baseStats.toMutableMap()
+            newStats[stat] = (newStats[stat] ?: 0) + 1
+            val newHero = hero.copy(
+                baseStats = newStats,
+                unspentStatPoints = hero.unspentStatPoints - 1
+            )
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
+    /** 消耗 1 属性点，加 50 HP */
+    fun allocateHpPoint(heroId: String) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            if (hero.unspentStatPoints <= 0) return@update state
+            val newHero = hero.copy(
+                maxHp = hero.maxHp + 50,
+                currentHp = hero.currentHp + 50, // 当前也加满
+                unspentStatPoints = hero.unspentStatPoints - 1
+            )
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
+    /** 消耗 1 属性点，加 20 MP */
+    fun allocateMpPoint(heroId: String) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            if (hero.unspentStatPoints <= 0) return@update state
+            val newHero = hero.copy(
+                maxMp = hero.maxMp + 20,
+                currentMp = hero.currentMp + 20,
+                unspentStatPoints = hero.unspentStatPoints - 1
+            )
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
+    /** 出售物品: 从仓库移除 → 获得金币 */
+    fun sellItem(item: Item) {
+        _uiState.update { state ->
+            val idx = state.inventory.indexOfFirst { it.id == item.id }
+            if (idx < 0) return@update state
+            val newInventory = state.inventory.toMutableList().apply { removeAt(idx) }
+            val guild = state.gameState.guild
+            state.copy(
+                inventory = newInventory,
+                gameState = state.gameState.copy(
+                    guild = guild.copy(gold = guild.gold + item.sellPrice)
+                )
             )
         }
     }
@@ -187,14 +344,29 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(selectedTactic = tactic) }
     }
 
-    fun toggleCarryItem(itemId: String) {
+    fun setSecondaryTactic(tactic: SecondaryTactic) {
+        _uiState.update { it.copy(selectedSecondaryTactic = tactic) }
+    }
+
+    /** 携带消耗品: +1 或 -1 (按 itemId 增减，可重复携带同种物品) */
+    fun addCarryItem(itemId: String) {
         _uiState.update { state ->
             val current = state.carriedItemIds
             val max = state.gameState.guild.maxCarryItems
-            val new = if (itemId in current) current - itemId
-                      else if (current.size < max) current + itemId
-                      else current
-            state.copy(carriedItemIds = new)
+            // 不能超过仓库中该物品的数量
+            val ownedCount = state.inventory.count { it.id == itemId }
+            val carriedCount = current.count { it == itemId }
+            if (current.size >= max || carriedCount >= ownedCount) return@update state
+            state.copy(carriedItemIds = current + itemId)
+        }
+    }
+
+    fun removeCarryItem(itemId: String) {
+        _uiState.update { state ->
+            val current = state.carriedItemIds.toMutableList()
+            val idx = current.indexOf(itemId)
+            if (idx >= 0) current.removeAt(idx)
+            state.copy(carriedItemIds = current)
         }
     }
 
@@ -354,15 +526,29 @@ class GameViewModel : ViewModel() {
 
     fun startExpedition() {
         val state = _uiState.value
+
+        // 从仓库中取出携带的消耗品
+        val toCarry = state.carriedItemIds.toMutableList()
+        val newInventory = state.inventory.toMutableList()
+        val actualCarried = mutableListOf<String>()
+        for (itemId in toCarry) {
+            val idx = newInventory.indexOfFirst { it.id == itemId }
+            if (idx >= 0) {
+                newInventory.removeAt(idx)
+                actualCarried.add(itemId)
+            }
+        }
+
         val session = ExpeditionSession(
             dungeonId = "main_dungeon",
             party = state.partySlots,
             tactic = state.selectedTactic,
+            secondaryTactic = state.selectedSecondaryTactic,
             currentSupply = state.gameState.guild.currentSupplies,
-            carriedItems = state.carriedItemIds,
+            carriedItems = actualCarried,
             isExploring = true
         )
-        _uiState.update { it.copy(expedition = session) }
+        _uiState.update { it.copy(expedition = session, inventory = newInventory) }
 
         // 启动协程驱动探索
         viewModelScope.launch {
@@ -399,5 +585,6 @@ data class GameUiState(
     // 编队临时状态
     val partySlots: List<PartySlot> = emptyList(),
     val selectedTactic: TacticType = TacticType.BALANCED,
+    val selectedSecondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
     val carriedItemIds: List<String> = emptyList()
 )

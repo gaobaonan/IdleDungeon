@@ -20,10 +20,12 @@ import com.example.idledungeon.model.Item
 @Composable
 fun ItemShopScreen(
     shopLevel: Int,
+    gold: Int,
     availableItems: List<Item>,
     investCost: Int,
     onBuy: (String) -> Unit,
     onInvest: () -> Unit,
+    onRefresh: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -36,6 +38,7 @@ fun ItemShopScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onRefresh) { Text("Refresh\n[DEBUG]") }
                     TextButton(onClick = onInvest) { Text("Invest / 投资") }
                 }
             )
@@ -46,8 +49,20 @@ fun ItemShopScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Text("Gold / 金币: ${gold} G",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp))
+            }
+            if (availableItems.isEmpty()) {
+                item {
+                    Text("Sold out / 已售罄 — 点击 [DEBUG] Refresh 刷新",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 24.dp))
+                }
+            }
             items(availableItems) { item ->
-                ShopItemCard(item) { onBuy(item.id) }
+                ShopItemCard(item, gold) { onBuy(item.id) }
             }
         }
     }

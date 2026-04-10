@@ -1,5 +1,6 @@
 package com.example.idledungeon.engine
 
+import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.model.*
 import com.example.idledungeon.viewmodel.GameUiState
 import kotlinx.coroutines.delay
@@ -8,208 +9,462 @@ import kotlinx.coroutines.flow.update
 
 /**
  * 探索引擎 - 协程驱动的放置式探索
- * 每隔一定时间推进一格，处理事件，消耗补给
+ *
+ * 主战术控制撤退条件，副战术控制 BFS 目标优先级。
+ * 已探索房间持久化在地图 grid (label "v" 前缀)，跨冒险生效。
+ * HP=0 表示重伤 (injured)，不是阵亡。
  */
 class ExplorationEngine {
 
     companion object {
-        /** 每层基础推进间隔 (毫秒) — 测试用 1 秒 */
-        private const val BASE_INTERVAL_MS = 1_000L
-        /** 补给消耗: 普通格 / 陷阱格 / 战斗格 */
+        private const val BASE_INTERVAL_MS = 600L
         private const val SUPPLY_NORMAL = 1
         private const val SUPPLY_TRAP = 3
         private const val SUPPLY_COMBAT = 2
     }
 
-    /**
-     * 运行探索循环 (在 viewModelScope 中启动)
-     */
+    /** 本次冒险中到达过的房间 (BFS 不重复走) */
+    private val visitedRooms = mutableSetOf<Pair<Int, Int>>()
+
     suspend fun run(session: ExpeditionSession, stateFlow: MutableStateFlow<GameUiState>) {
+        visitedRooms.clear()
         val state = stateFlow.value
         val layer = session.currentLayer
 
-        // 生成当前楼层地图 (如果还没有)
-        val floor = state.currentFloor ?: DungeonGenerator.generate(layer)
-        stateFlow.update { it.copy(currentFloor = floor) }
+        var currentFloor = state.currentFloor ?: DungeonGenerator.generate(layer)
+        val startPos = findStairsUp(currentFloor)
+        visitedRooms.add(startPos)
+        currentFloor = revealVisibility(currentFloor, startPos.first, startPos.second)
 
-        // 找到楼梯上行位置作为起始点
-        val startPos = findStairsUp(floor)
-        val interval = BASE_INTERVAL_MS * layer // 更深层 = 更慢
-        var currentSession = session.copy(
+        var s = session.copy(
             isExploring = true,
-            posX = startPos.first,
-            posY = startPos.second
+            posX = startPos.first, posY = startPos.second,
+            combatLog = listOf("== Floor $layer / 第${layer}层 探索开始 ==")
         )
-        var currentFloor = floor
+        stateFlow.update { it.copy(currentFloor = currentFloor, expedition = s) }
+        delay(BASE_INTERVAL_MS)
 
-        // 简单的寻路: 从当前位置向楼梯方向移动
-        while (currentSession.isExploring && currentSession.currentSupply > 0) {
-            delay(interval)
-
-            // 1. 移动到下一个可通行节点
-            val (nx, ny) = findNextStep(currentFloor, currentSession.posX, currentSession.posY)
-            if (nx == currentSession.posX && ny == currentSession.posY) {
-                // 无路可走 → 结束
+        while (s.isExploring && s.currentSupply > 0) {
+            // ── 主战术: 撤退判定 ──
+            if (shouldRetreat(s, stateFlow)) {
+                s = s.appendLog("")
+                s = s.appendLog("Tactic retreat / 战术撤退！")
+                s = s.copy(isExploring = false)
+                stateFlow.update { it.copy(expedition = s) }
                 break
             }
 
-            // 2. 标记已探索
-            val updatedGrid = currentFloor.grid.mapIndexed { y, row ->
-                row.mapIndexed { x, node ->
-                    if (x == nx && y == ny) node.copy(explored = true) else node
-                }
-            }
-            currentFloor = currentFloor.copy(grid = updatedGrid)
+            val cx = s.posX; val cy = s.posY
 
-            // 3. 处理当前节点事件
+            // ── 副战术: BFS 寻路 ──
+            val next = bfsNextStep(currentFloor, cx, cy, s.secondaryTactic) ?: run {
+                s = s.appendLog("")
+                s = s.appendLog("No path forward / 无路可走，撤退...")
+                s = s.copy(isExploring = false)
+                stateFlow.update { it.copy(expedition = s) }
+                break
+            }
+            val (nx, ny) = next
             val node = currentFloor.grid[ny][nx]
+
+            val isRoom = isRoomNode(node)
+            if (isRoom) visitedRooms.add(nx to ny)
+
+            currentFloor = revealVisibility(currentFloor, nx, ny)
+
+            // 标记已到达 (label "v" 前缀)
+            if (isRoom && !node.label.startsWith("v")) {
+                currentFloor = markVisited(currentFloor, nx, ny)
+            }
+
+            // 房间名称
+            val roomLabel = node.label.removePrefix("v")
+            val roomName = when {
+                node.type == NodeType.BOSS_ROOM -> "Boss Room / Boss房"
+                node.event == NodeEvent.STAIRS_DOWN -> "Stairs / 楼梯间"
+                node.event == NodeEvent.STAIRS_UP -> "Entry / 入口"
+                roomLabel.isNotEmpty() -> "Room $roomLabel / 房间$roomLabel"
+                else -> ""
+            }
+
+            val hasEvent = node.event != NodeEvent.NONE && node.event != NodeEvent.STAIRS_UP
             val supplyCost: Int
             val log = mutableListOf<String>()
 
-            when (node.event) {
-                NodeEvent.NONE -> {
-                    supplyCost = SUPPLY_NORMAL
-                    log.add("Moved to ($nx, $ny) - nothing here / 平安无事")
+            if (!hasEvent) {
+                supplyCost = SUPPLY_NORMAL
+                if (isRoom && node.event == NodeEvent.NONE) {
+                    log.add("")
+                    log.add("[ $roomName ] Entered / 进入 — nothing here / 平安无事")
                 }
-                NodeEvent.TRAP -> {
-                    supplyCost = SUPPLY_TRAP
-                    log.add("Trap! / 陷阱！ Supply -$SUPPLY_TRAP")
-                    // TODO: 对队伍造成伤害
-                }
-                NodeEvent.ENCOUNTER -> {
-                    supplyCost = SUPPLY_COMBAT
-                    val heroes = getPartyHeroes(stateFlow.value, currentSession.party)
-                    if (node.monsterIds.isNotEmpty() && heroes.isNotEmpty()) {
-                        val result = CombatEngine.fight(heroes, node.monsterIds)
-                        log.addAll(result.log)
-                        currentSession = currentSession.copy(
-                            backpack = currentSession.backpack + result.droppedItems
-                        )
-                        // TODO: 更新英雄 HP 状态
-                        if (!result.victory) {
-                            log.add("Party wiped! Retreating... / 全灭！撤退...")
-                            currentSession = currentSession.copy(isExploring = false)
+            } else {
+                val header = if (roomName.isNotEmpty()) "[ $roomName ]" else "[Corridor / 走廊]"
+
+                when (node.event) {
+                    NodeEvent.TRAP -> {
+                        supplyCost = SUPPLY_TRAP
+                        log.add(""); log.add("$header TRAP / 陷阱！")
+                        val trapDmg = 5 * s.currentLayer
+                        val heroes = getPartyHeroes(stateFlow.value, s.party)
+                        if (heroes.isNotEmpty()) {
+                            val damaged = heroes.map { it.copy(currentHp = (it.currentHp - trapDmg).coerceAtLeast(0)) }
+                            updateHeroes(stateFlow, damaged)
+                            log.add("  All heroes take $trapDmg damage / 全体受到${trapDmg}点伤害")
+                            damaged.forEach { h -> log.add("  ${h.name}: HP ${h.currentHp}/${h.maxHp}") }
                         }
+                        currentFloor = clearEvent(currentFloor, nx, ny)
                     }
-                }
-                NodeEvent.LOOT -> {
-                    supplyCost = SUPPLY_NORMAL
-                    val loot = node.lootTable.filter { (_, chance) ->
-                        kotlin.random.Random.nextInt(100) < chance
-                    }.keys.toList()
-                    currentSession = currentSession.copy(backpack = currentSession.backpack + loot)
-                    log.add("Found loot / 发现宝物: ${loot.joinToString()}")
-                }
-                NodeEvent.BOSS_FIGHT -> {
-                    supplyCost = SUPPLY_COMBAT * 2
-                    val heroes = getPartyHeroes(stateFlow.value, currentSession.party)
-                    if (node.monsterIds.isNotEmpty() && heroes.isNotEmpty()) {
-                        val result = CombatEngine.fight(heroes, node.monsterIds)
-                        log.addAll(result.log)
-                        currentSession = currentSession.copy(
-                            backpack = currentSession.backpack + result.droppedItems
-                        )
-                        if (!result.victory) {
-                            currentSession = currentSession.copy(isExploring = false)
+                    NodeEvent.ENCOUNTER -> {
+                        supplyCost = SUPPLY_COMBAT
+                        val heroes = getPartyHeroes(stateFlow.value, s.party)
+                        if (node.monsterIds.isNotEmpty() && heroes.isNotEmpty()) {
+                            log.add(""); log.add("$header ENCOUNTER / 遭遇战！")
+                            val result = CombatEngine.fight(heroes, node.monsterIds, s.carriedItems)
+                            log.addAll(result.log)
+                            updateHeroes(stateFlow, result.updatedHeroes)
+                            s = s.copy(backpack = s.backpack + result.droppedItems, carriedItems = result.remainingCarriedItems)
+                            if (result.victory) {
+                                currentFloor = clearEvent(currentFloor, nx, ny)
+                            } else {
+                                log.add("Party injured! Retreating... / 全员重伤！撤退...")
+                                // 败北 → 取消 visited 标记，保留事件
+                                visitedRooms.remove(nx to ny)
+                                currentFloor = unmarkVisited(currentFloor, nx, ny)
+                                s = s.copy(isExploring = false)
+                            }
+                        } else { supplyCost.let { } }
+                    }
+                    NodeEvent.LOOT -> {
+                        supplyCost = SUPPLY_NORMAL
+                        log.add(""); log.add("$header LOOT / 发现宝箱！")
+                        val loot = node.lootTable.filter { (_, c) -> kotlin.random.Random.nextInt(100) < c }.keys.toList()
+                        if (loot.isNotEmpty()) {
+                            s = s.copy(backpack = s.backpack + loot)
+                            log.add("  Obtained / 获得: ${loot.joinToString()}")
+                        } else {
+                            log.add("  Empty chest... / 空箱子...")
                         }
+                        currentFloor = clearEvent(currentFloor, nx, ny)
                     }
-                }
-                NodeEvent.STAIRS_DOWN -> {
-                    supplyCost = SUPPLY_NORMAL
-                    log.add("Found stairs down / 发现下行楼梯！")
-                    // 生成下一层，入口位置 = 当前下楼梯位置
-                    val newLayer = currentSession.currentLayer + 1
-                    currentFloor = DungeonGenerator.generate(newLayer, entryX = nx, entryY = ny)
-                    val newStart = findStairsUp(currentFloor)
-                    currentSession = currentSession.copy(
-                        currentLayer = newLayer, posX = newStart.first, posY = newStart.second
-                    )
-                }
-                NodeEvent.STAIRS_UP -> {
-                    supplyCost = SUPPLY_NORMAL
-                    log.add("Found stairs up / 发现上行楼梯")
+                    NodeEvent.BOSS_FIGHT -> {
+                        supplyCost = SUPPLY_COMBAT * 2
+                        val heroes = getPartyHeroes(stateFlow.value, s.party)
+                        if (node.monsterIds.isNotEmpty() && heroes.isNotEmpty()) {
+                            log.add(""); log.add("$header ★ BOSS BATTLE / Boss战！ ★")
+                            val result = CombatEngine.fight(heroes, node.monsterIds, s.carriedItems)
+                            log.addAll(result.log)
+                            updateHeroes(stateFlow, result.updatedHeroes)
+                            s = s.copy(backpack = s.backpack + result.droppedItems, carriedItems = result.remainingCarriedItems)
+                            if (result.victory) {
+                                log.add("★ Boss defeated! / Boss被击败！ ★")
+                                currentFloor = clearEvent(currentFloor, nx, ny)
+                            } else {
+                                log.add("Defeated by Boss... / 被Boss击倒...全员重伤！")
+                                visitedRooms.remove(nx to ny)
+                                currentFloor = unmarkVisited(currentFloor, nx, ny)
+                                s = s.copy(isExploring = false)
+                            }
+                        } else { supplyCost.let { } }
+                    }
+                    NodeEvent.STAIRS_DOWN -> {
+                        supplyCost = SUPPLY_NORMAL
+                        log.add(""); log.add("$header >> STAIRS DOWN / 发现下行楼梯！")
+                        val newLayer = s.currentLayer + 1
+                        currentFloor = DungeonGenerator.generate(newLayer, entryX = nx, entryY = ny)
+                        visitedRooms.clear()
+                        val newStart = findStairsUp(currentFloor)
+                        visitedRooms.add(newStart)
+                        currentFloor = revealVisibility(currentFloor, newStart.first, newStart.second)
+                        s = s.copy(currentLayer = newLayer, posX = newStart.first, posY = newStart.second)
+                        log.add(""); log.add("== Floor $newLayer / 第${newLayer}层 探索开始 ==")
+                    }
+                    else -> { supplyCost = SUPPLY_NORMAL }
                 }
             }
 
-            // 4. 更新状态
-            currentSession = currentSession.copy(
-                posX = nx,
-                posY = ny,
-                currentSupply = (currentSession.currentSupply - supplyCost).coerceAtLeast(0),
-                combatLog = currentSession.combatLog + log
+            s = s.copy(
+                posX = nx, posY = ny,
+                currentSupply = (s.currentSupply - supplyCost).coerceAtLeast(0),
+                combatLog = s.combatLog + log
             )
-
             stateFlow.update {
-                it.copy(
-                    currentFloor = currentFloor,
-                    expedition = currentSession,
-                    gameState = it.gameState.copy(
-                        deepestFloorReached = maxOf(it.gameState.deepestFloorReached, currentSession.currentLayer)
-                    )
-                )
+                it.copy(currentFloor = currentFloor, expedition = s,
+                    gameState = it.gameState.copy(deepestFloorReached = maxOf(it.gameState.deepestFloorReached, s.currentLayer)))
             }
 
-            // 5. 检查撤退条件
-            if (currentSession.currentSupply <= 0) {
-                currentSession = currentSession.copy(isExploring = false)
-                stateFlow.update {
-                    it.copy(
-                        expedition = currentSession.copy(
-                            combatLog = currentSession.combatLog + "Out of supplies! Retreating... / 补给耗尽！撤退..."
-                        )
-                    )
-                }
+            if (s.currentSupply <= 0) {
+                s = s.appendLog(""); s = s.appendLog("Out of supplies! Retreating... / 补给耗尽！撤退...")
+                s = s.copy(isExploring = false)
+                stateFlow.update { it.copy(expedition = s) }; break
             }
+            val alive = getPartyHeroes(stateFlow.value, s.party)
+            if (alive.none { it.isAlive }) {
+                s = s.appendLog(""); s = s.appendLog("All heroes injured! / 全员重伤！")
+                s = s.copy(isExploring = false)
+                stateFlow.update { it.copy(expedition = s) }; break
+            }
+
+            val stepDelay = if (!hasEvent) BASE_INTERVAL_MS / 3 else BASE_INTERVAL_MS
+            delay(stepDelay)
+        }
+
+        // ── 探索结束 ──
+        if (s.isExploring) s = s.copy(isExploring = false)
+        s = s.appendLog("")
+        s = s.appendLog("== Expedition ended / 探索结束 ==")
+        s = s.appendLog(if (s.backpack.isNotEmpty()) "Loot / 战利品: ${s.backpack.joinToString()}" else "No loot / 无战利品")
+        healPartyFull(stateFlow, s.party)
+        s = s.appendLog("Party healed / 队伍已完全恢复")
+        returnUnusedItems(stateFlow, s.carriedItems)
+        transferBackpackToInventory(stateFlow, s.backpack)
+        stateFlow.update { it.copy(expedition = s) }
+    }
+
+    // ============================
+    // 主战术: 撤退判定
+    // ============================
+
+    private fun shouldRetreat(session: ExpeditionSession, stateFlow: MutableStateFlow<GameUiState>): Boolean {
+        if (session.tactic == TacticType.AGGRESSIVE) return false
+
+        val heroes = getPartyHeroes(stateFlow.value, session.party).filter { it.isAlive }
+        if (heroes.isEmpty()) return false
+
+        // 是否有回复手段 (生命药水 或 治疗法术)
+        val hasHealPotion = session.carriedItems.any { it == "health_potion" || it == "great_health_potion" }
+        val hasHealSpell = heroes.any { hero ->
+            val canCast = hero.heroClass == HeroClass.CLERIC
+            canCast && hero.spells.any { spell ->
+                val t = com.example.idledungeon.data.SpellRegistry.get(spell.templateId)
+                (t.target == SpellTarget.HEAL_SINGLE || t.target == SpellTarget.HEAL_AOE) &&
+                    hero.currentMp >= t.tiers[spell.currentTier - 1].mpCost
+            }
+        }
+        val hasHealing = hasHealPotion || hasHealSpell
+        if (hasHealing) return false
+
+        val anyBelow50 = heroes.any { it.currentHp.toFloat() / it.maxHp < 0.5f }
+        val anyBelow20 = heroes.any { it.currentHp.toFloat() / it.maxHp < 0.2f }
+        val totalHpRatio = heroes.sumOf { it.currentHp }.toFloat() / heroes.sumOf { it.maxHp }
+
+        return when (session.tactic) {
+            TacticType.SAFE -> anyBelow50
+            TacticType.BALANCED -> anyBelow20 || totalHpRatio < 0.5f
+            TacticType.RISKY -> anyBelow20
+            TacticType.AGGRESSIVE -> false
         }
     }
 
+    // ============================
+    // 副战术: BFS 寻路
+    // ============================
+
     /**
-     * 找到楼梯上行位置作为起始点；找不到则回退到第一个房间格子
+     * BFS 寻路，优先级根据副战术变化:
+     *
+     * 所有模式共通:
+     *   - 已探索的房间 (label 以 "v" 开头) 永远不会成为目标
+     *   - 未探索的拐角 (frontier) 和未探索的房间同等优先
+     *
+     * STRATEGY (攻略优先):
+     *   优先: 未探索的房间/拐角 → 楼梯 → Boss
+     *   如果发现了楼梯，楼梯成为最高优先
+     *
+     * SCAVENGE (搜刮优先):
+     *   优先: 未探索的房间/拐角 (排除 Boss/楼梯)
+     *   全部探索完后才前往 Boss，Boss 击败后才去楼梯
+     *
+     * BOSS_RUSH (Boss优先):
+     *   优先: 未击败 Boss → 未探索的房间/拐角 → 楼梯
      */
+    private fun bfsNextStep(floor: DungeonFloor, cx: Int, cy: Int, tactic: SecondaryTactic): Pair<Int, Int>? {
+        val queue = ArrayDeque<Pair<Int, Int>>()
+        val prev = mutableMapOf<Pair<Int, Int>, Pair<Int, Int>>()
+        val seen = mutableSetOf(cx to cy)
+        queue.add(cx to cy)
+
+        // 收集不同类型的最近目标
+        var nearestRoom: Pair<Int, Int>? = null      // 未探索房间
+        var nearestFrontier: Pair<Int, Int>? = null   // 未探索拐角
+        var nearestBoss: Pair<Int, Int>? = null       // 未击败 Boss
+        var nearestStairs: Pair<Int, Int>? = null     // 下楼梯
+
+        while (queue.isNotEmpty()) {
+            val (x, y) = queue.removeFirst()
+            if (x != cx || y != cy) {
+                val node = floor.grid[y][x]
+
+                // 未探索房间 (label 非空, 没有 "v" 前缀, 不是 Boss/楼梯)
+                val isUnexploredRoom = node.label.isNotEmpty() && !node.label.startsWith("v")
+                    && node.type == NodeType.CORRIDOR
+                    && node.event != NodeEvent.BOSS_FIGHT && node.event != NodeEvent.STAIRS_DOWN
+
+                if (isUnexploredRoom && nearestRoom == null) nearestRoom = x to y
+
+                // 未击败 Boss (仍有 BOSS_FIGHT 事件)
+                if (node.type == NodeType.BOSS_ROOM && node.event == NodeEvent.BOSS_FIGHT
+                    && (x to y) !in visitedRooms && nearestBoss == null) {
+                    nearestBoss = x to y
+                }
+
+                // 下楼梯
+                if (node.event == NodeEvent.STAIRS_DOWN && (x to y) !in visitedRooms && nearestStairs == null) {
+                    nearestStairs = x to y
+                }
+
+                // 迷雾边界 (拐角: 已揭示的格子，旁边有未揭示的非墙格)
+                if (nearestFrontier == null) {
+                    val isFrontier = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0).any { (dx, dy) ->
+                        val fx = x + dx; val fy = y + dy
+                        fy in floor.grid.indices && fx in floor.grid[0].indices
+                            && !floor.grid[fy][fx].explored && floor.grid[fy][fx].type != NodeType.WALL
+                    }
+                    if (isFrontier) nearestFrontier = x to y
+                }
+            }
+            for ((dx, dy) in listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)) {
+                val fx = x + dx; val fy = y + dy
+                if (fy !in floor.grid.indices || fx !in floor.grid[0].indices) continue
+                if ((fx to fy) in seen) continue
+                val adj = floor.grid[fy][fx]
+                if (adj.type == NodeType.WALL || !adj.explored) continue
+                seen.add(fx to fy)
+                prev[fx to fy] = x to y
+                queue.add(fx to fy)
+            }
+        }
+
+        // 检查是否还有未探索内容
+        val hasUnexplored = nearestRoom != null || nearestFrontier != null
+
+        // 按副战术选择目标
+        val target = when (tactic) {
+            SecondaryTactic.STRATEGY -> {
+                // 有楼梯就优先楼梯，否则探索房间/拐角，最后 Boss
+                if (nearestStairs != null && !hasUnexplored) nearestStairs
+                else nearestRoom ?: nearestFrontier ?: nearestStairs ?: nearestBoss
+            }
+            SecondaryTactic.SCAVENGE -> {
+                // 先全部探索完，再打 Boss，最后下楼
+                if (hasUnexplored) nearestRoom ?: nearestFrontier
+                else nearestBoss ?: nearestStairs
+            }
+            SecondaryTactic.BOSS_RUSH -> {
+                // 有未击败 Boss 就最优先
+                nearestBoss ?: nearestRoom ?: nearestFrontier ?: nearestStairs
+            }
+        } ?: return null
+
+        // 回溯路径取第一步
+        var step = target
+        while (true) {
+            val p = prev[step] ?: return step
+            if (p.first == cx && p.second == cy) return step
+            step = p
+        }
+    }
+
+    // ============================
+    // 战争迷雾
+    // ============================
+
+    private fun revealVisibility(floor: DungeonFloor, px: Int, py: Int): DungeonFloor {
+        val visible = mutableSetOf(px to py)
+        for ((dx, dy) in listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0)) {
+            var i = 1
+            while (true) {
+                val nx = px + dx * i; val ny = py + dy * i
+                if (ny !in floor.grid.indices || nx !in floor.grid[0].indices) break
+                val node = floor.grid[ny][nx]
+                visible.add(nx to ny)
+                if (node.type == NodeType.WALL || node.type == NodeType.BOSS_ROOM) break
+                if (node.type == NodeType.CORRIDOR && node.label.isNotEmpty()) break
+                i++
+            }
+        }
+        val toReveal = mutableSetOf<Pair<Int, Int>>()
+        for ((vx, vy) in visible) {
+            for (d2 in -1..1) for (d1 in -1..1) {
+                val rx = vx + d1; val ry = vy + d2
+                if (ry in floor.grid.indices && rx in floor.grid[0].indices) toReveal.add(rx to ry)
+            }
+        }
+        return floor.copy(grid = floor.grid.mapIndexed { y, row ->
+            row.mapIndexed { x, node ->
+                if ((x to y) in toReveal && !node.explored) node.copy(explored = true) else node
+            }
+        })
+    }
+
+    // ============================
+    // Helpers
+    // ============================
+
+    private fun isRoomNode(node: DungeonNode): Boolean =
+        (node.label.isNotEmpty() && node.type == NodeType.CORRIDOR)
+            || node.type == NodeType.BOSS_ROOM
+            || node.event == NodeEvent.STAIRS_DOWN
+            || node.event == NodeEvent.STAIRS_UP
+
+    private fun markVisited(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
+        floor.copy(grid = floor.grid.mapIndexed { gy, row ->
+            row.mapIndexed { gx, n -> if (gx == x && gy == y && !n.label.startsWith("v")) n.copy(label = "v" + n.label) else n }
+        })
+
+    private fun unmarkVisited(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
+        floor.copy(grid = floor.grid.mapIndexed { gy, row ->
+            row.mapIndexed { gx, n -> if (gx == x && gy == y && n.label.startsWith("v")) n.copy(label = n.label.removePrefix("v")) else n }
+        })
+
+    private fun clearEvent(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
+        floor.copy(grid = floor.grid.mapIndexed { gy, row ->
+            row.mapIndexed { gx, n ->
+                if (gx == x && gy == y) n.copy(event = NodeEvent.NONE, monsterIds = emptyList(), lootTable = emptyMap()) else n
+            }
+        })
+
     private fun findStairsUp(floor: DungeonFloor): Pair<Int, Int> {
-        for (y in floor.grid.indices) {
-            for (x in floor.grid[y].indices) {
-                if (floor.grid[y][x].event == NodeEvent.STAIRS_UP) return x to y
-            }
-        }
-        // 回退: 找第一个非墙壁格子
-        for (y in floor.grid.indices) {
-            for (x in floor.grid[y].indices) {
-                if (floor.grid[y][x].type != NodeType.WALL) return x to y
-            }
-        }
+        for (y in floor.grid.indices) for (x in floor.grid[y].indices)
+            if (floor.grid[y][x].event == NodeEvent.STAIRS_UP) return x to y
+        for (y in floor.grid.indices) for (x in floor.grid[y].indices)
+            if (floor.grid[y][x].type != NodeType.WALL) return x to y
         return 0 to 0
     }
 
-    /**
-     * 简单寻路: 向最近的未探索可通行节点移动
-     */
-    private fun findNextStep(floor: DungeonFloor, cx: Int, cy: Int): Pair<Int, Int> {
-        val directions = listOf(0 to 1, 0 to -1, 1 to 0, -1 to 0).shuffled()
-        for ((dx, dy) in directions) {
-            val nx = cx + dx
-            val ny = cy + dy
-            if (ny in floor.grid.indices && nx in floor.grid[0].indices) {
-                val node = floor.grid[ny][nx]
-                if (node.type != NodeType.WALL && !node.explored) {
-                    return nx to ny
-                }
-            }
+    private fun getPartyHeroes(state: GameUiState, party: List<PartySlot>): List<Hero> =
+        party.mapNotNull { slot -> state.heroes.find { it.id == slot.heroId } }
+
+    private fun updateHeroes(stateFlow: MutableStateFlow<GameUiState>, updatedHeroes: List<Hero>) {
+        stateFlow.update { state ->
+            val map = updatedHeroes.associateBy { it.id }
+            state.copy(heroes = state.heroes.map { map[it.id] ?: it })
         }
-        // 如果所有未探索方向都走过了，允许走已探索的格子
-        for ((dx, dy) in directions) {
-            val nx = cx + dx
-            val ny = cy + dy
-            if (ny in floor.grid.indices && nx in floor.grid[0].indices) {
-                if (floor.grid[ny][nx].type != NodeType.WALL) {
-                    return nx to ny
-                }
-            }
-        }
-        return cx to cy // 真的无路可走
     }
 
-    private fun getPartyHeroes(state: GameUiState, party: List<PartySlot>): List<Hero> {
-        return party.mapNotNull { slot -> state.heroes.find { it.id == slot.heroId } }
+    private fun healPartyFull(stateFlow: MutableStateFlow<GameUiState>, party: List<PartySlot>) {
+        val ids = party.map { it.heroId }.toSet()
+        stateFlow.update { state ->
+            state.copy(heroes = state.heroes.map { h ->
+                if (h.id in ids) h.copy(currentHp = h.maxHp, currentMp = h.maxMp) else h
+            })
+        }
     }
+
+    private fun transferBackpackToInventory(stateFlow: MutableStateFlow<GameUiState>, backpack: List<String>) {
+        if (backpack.isEmpty()) return
+        stateFlow.update { state ->
+            val items = backpack.mapNotNull { id -> try { ItemRegistry.get(id) } catch (_: Exception) { null } }
+            state.copy(inventory = state.inventory + items)
+        }
+    }
+
+    private fun returnUnusedItems(stateFlow: MutableStateFlow<GameUiState>, remaining: List<String>) {
+        if (remaining.isEmpty()) return
+        stateFlow.update { state ->
+            val items = remaining.mapNotNull { id -> try { ItemRegistry.get(id) } catch (_: Exception) { null } }
+            state.copy(inventory = state.inventory + items)
+        }
+    }
+
+    private fun ExpeditionSession.appendLog(msg: String) = copy(combatLog = combatLog + msg)
 }

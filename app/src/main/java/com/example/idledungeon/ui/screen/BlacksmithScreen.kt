@@ -8,8 +8,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import com.example.idledungeon.model.EquipSlot
 import com.example.idledungeon.model.Item
+import com.example.idledungeon.model.Rarity
 
 /**
  * 铁匠铺界面
@@ -20,10 +23,12 @@ import com.example.idledungeon.model.Item
 @Composable
 fun BlacksmithScreen(
     shopLevel: Int,
+    gold: Int,
     availableItems: List<Item>,
     investCost: Int,
     onBuy: (String) -> Unit,
     onInvest: () -> Unit,
+    onRefresh: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -36,6 +41,7 @@ fun BlacksmithScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onRefresh) { Text("Refresh\n[DEBUG]") }
                     TextButton(onClick = onInvest) { Text("Invest / 投资") }
                 }
             )
@@ -46,8 +52,20 @@ fun BlacksmithScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                Text("Gold / 金币: ${gold} G",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp))
+            }
+            if (availableItems.isEmpty()) {
+                item {
+                    Text("Sold out / 已售罄 — 点击 [DEBUG] Refresh 刷新",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 24.dp))
+                }
+            }
             items(availableItems) { item ->
-                ShopItemCard(item) { onBuy(item.id) }
+                ShopItemCard(item, gold) { onBuy(item.id) }
             }
         }
     }
@@ -55,21 +73,50 @@ fun BlacksmithScreen(
 
 /** 商店物品卡片 - 铁匠铺 & 道具店共用 */
 @Composable
-fun ShopItemCard(item: Item, onBuy: () -> Unit) {
+fun ShopItemCard(item: Item, gold: Int, onBuy: () -> Unit) {
+    val price = item.baseValue
+    val canAfford = gold >= price
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.padding(12.dp)) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.name, style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(item.name, style = MaterialTheme.typography.titleSmall)
+                    if (item.rarity != Rarity.COMMON) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            item.rarity.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (item.rarity) {
+                                Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
+                                Rarity.RARE -> MaterialTheme.colorScheme.tertiary
+                                Rarity.EPIC -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+                }
                 Text(item.description, style = MaterialTheme.typography.bodySmall)
-                if (item.baseValue > 0) {
-                    Text(
-                        "${if (item.equipSlot?.name == "WEAPON") "ATK" else "DEF"}: ${item.baseValue}",
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                if (item.baseValue > 0 && item.equipSlot != null) {
+                    val label = when (item.equipSlot) {
+                        EquipSlot.WEAPON -> "ATK"
+                        EquipSlot.ARMOR -> "DEF"
+                        else -> ""
+                    }
+                    if (label.isNotEmpty()) {
+                        Text("$label: ${item.baseValue}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                if (item.statBonuses.isNotEmpty()) {
+                    val bonusText = item.statBonuses.entries.joinToString("  ") { "+${it.value} ${it.key}" }
+                    Text(bonusText, style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary)
                 }
             }
-            Button(onClick = onBuy) {
-                Text("${item.sellPrice * 2} G")
+            Button(onClick = onBuy, enabled = canAfford) {
+                Text("${price} G")
             }
         }
     }

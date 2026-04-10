@@ -79,6 +79,17 @@ private fun HeroRecruitCard(
                 Text("Lv.${hero.level} ${hero.heroClass.name}", style = MaterialTheme.typography.bodySmall)
                 Text("HP: ${hero.maxHp}  ATK: ${hero.attack}  DEF: ${hero.defense}",
                     style = MaterialTheme.typography.labelSmall)
+                if (hero.spells.isNotEmpty()) {
+                    val mc = hero.spells.count {
+                        com.example.idledungeon.data.SpellRegistry.get(it.templateId).type ==
+                            com.example.idledungeon.model.SpellType.MAGIC
+                    }
+                    val mr = hero.spells.size - mc
+                    val parts = mutableListOf<String>()
+                    if (mc > 0) parts.add("Magic:$mc")
+                    if (mr > 0) parts.add("Miracle:$mr")
+                    Text(parts.joinToString("  "), style = MaterialTheme.typography.labelSmall)
+                }
             }
             Button(onClick = { onRecruit(hero.id) }) {
                 Text("Recruit\n招募")

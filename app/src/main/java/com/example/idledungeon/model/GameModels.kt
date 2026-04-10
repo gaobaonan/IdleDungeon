@@ -28,11 +28,19 @@ enum class HeroStatus { IDLE, DEPLOYED, INJURED }
 /** 队伍站位 (影响挨打概率) */
 enum class Position { FRONT, BACK }
 
-/** 战术倾向 */
+/** 主战术 (撤退条件) */
 enum class TacticType {
-    SAFE,       // 稳扎稳打 (HP<50% 自动撤退)
-    BALANCED,   // 平衡
-    AGGRESSIVE  // 孤注一掷 (死战不退)
+    SAFE,        // 稳扎稳打: 有人 HP<50% 且无回复手段 → 撤退
+    BALANCED,    // 平衡: 有人 HP<20% 或全队 HP<50% 且无回复手段 → 撤退
+    RISKY,       // 险中求胜: 有人 HP<20% 且无回复手段 → 撤退
+    AGGRESSIVE   // 孤注一掷: 永不撤退
+}
+
+/** 副战术 (探索策略) */
+enum class SecondaryTactic {
+    STRATEGY,    // 攻略优先: 正常探索，发现楼梯则优先下楼
+    SCAVENGE,    // 搜刮优先: 避开 Boss/楼梯，全部房间+拐角探索完后才打 Boss
+    BOSS_RUSH    // Boss优先: 发现未击败 Boss 则优先前往
 }
 
 /** 地牢节点类型 */
@@ -63,8 +71,21 @@ enum class SkillEffect {
     STUN          // 击晕 (跳过一回合)
 }
 
+/** 魔法/奇迹分类 */
+enum class SpellType { MAGIC, MIRACLE }
+
+/** 法术功能类型 */
+enum class SpellTarget {
+    DAMAGE_SINGLE,   // 伤害敌方单体
+    DAMAGE_AOE,      // 伤害敌方群体
+    HEAL_SINGLE,     // 治疗我方单体
+    HEAL_AOE,        // 治疗我方群体
+    BUFF_SINGLE,     // 增益我方单体属性
+    DEBUFF_SINGLE    // 减益敌方单体属性
+}
+
 // ==========================================
-// 2. 特质 / 物品 / 英雄
+// 2. 特质 / 物品 / 英雄 / 魔法
 // ==========================================
 
 /** 特质 - 类似暗黑地牢的好/坏特性 */
@@ -90,6 +111,36 @@ data class Item(
     val statBonuses: Map<StatType, Int> = emptyMap()
 )
 
+/** 魔法/奇迹的单个阶级 */
+data class SpellTier(
+    val name: String,
+    val description: String,
+    val power: Int,          // 基础威力
+    val mpCost: Int          // 魔力消耗
+)
+
+/** 魔法/奇迹模板 - 包含4个阶级形态 */
+data class SpellTemplate(
+    val id: String,
+    val type: SpellType,            // MAGIC(智力系) / MIRACLE(信仰系)
+    val target: SpellTarget,        // 功能类型
+    val affectedStat: StatType? = null, // BUFF/DEBUFF 影响的属性
+    val tiers: List<SpellTier>      // 固定4个阶级
+) {
+    fun tierName(tier: Int): String = tiers[tier.coerceIn(0, 3)].name
+}
+
+/** 英雄已习得的魔法/奇迹实例 */
+data class HeroSpell(
+    val templateId: String,
+    val currentTier: Int = 1  // 1-4
+) {
+    /** 升到目标阶级所需的英雄等级: 1 + 3 * (tier - 1) */
+    companion object {
+        fun requiredLevel(targetTier: Int): Int = 1 + 3 * (targetTier - 1)
+    }
+}
+
 /** 英雄 - 游戏核心资产 */
 data class Hero(
     val id: String,
@@ -103,28 +154,52 @@ data class Hero(
     val currentMp: Int = 0,
     val maxMp: Int = 0,
     val baseStats: Map<StatType, Int>,          // 四维基础值
+    val unspentStatPoints: Int = 0,             // 未分配属性点 (每升级 +5)
+    val unspentSkillPoints: Int = 0,            // 未分配技能点 (每升级 +1)
     val traits: List<Trait> = emptyList(),
+    val spells: List<HeroSpell> = emptyList(),
     val proficiencies: Map<WeaponType, Int> = emptyMap(),
     val equipment: Map<EquipSlot, Item> = emptyMap(),
     val status: HeroStatus = HeroStatus.IDLE
 ) {
     val isAlive: Boolean get() = currentHp > 0
 
+    /** 升到下一级所需的总经验值: 50 * level * (level + 1) / 2 */
+    val expToNextLevel: Int get() = 50 * level * (level + 1) / 2
+
+    /** 有效属性 = 基础 + 所有装备加成 */
+    val effectiveStats: Map<StatType, Int> get() {
+        val bonuses = mutableMapOf<StatType, Int>()
+        equipment.values.forEach { equip ->
+            equip.statBonuses.forEach { (stat, v) ->
+                bonuses[stat] = (bonuses[stat] ?: 0) + v
+            }
+        }
+        return StatType.entries.associate { stat ->
+            stat to ((baseStats[stat] ?: 0) + (bonuses[stat] ?: 0))
+        }
+    }
+
     /** 综合攻击力 = 基础属性 + 武器 */
     val attack: Int get() {
-        val str = baseStats[StatType.STR] ?: 0
-        val dex = baseStats[StatType.DEX] ?: 0
+        val es = effectiveStats
+        val str = es[StatType.STR] ?: 0
+        val dex = es[StatType.DEX] ?: 0
         val weaponPower = equipment[EquipSlot.WEAPON]?.baseValue ?: 0
         return str + dex / 2 + weaponPower
     }
 
     /** 综合防御力 = 基础属性 + 护甲 */
     val defense: Int get() {
-        val str = baseStats[StatType.STR] ?: 0
-        val dex = baseStats[StatType.DEX] ?: 0
+        val es = effectiveStats
+        val str = es[StatType.STR] ?: 0
+        val dex = es[StatType.DEX] ?: 0
         val armorPower = equipment[EquipSlot.ARMOR]?.baseValue ?: 0
         return str / 2 + dex / 3 + armorPower
     }
+
+    /** 战斗力 = ATK + DEF + INT + FTH (不含 HP/MP) */
+    val combatPower: Int get() = attack + defense + (effectiveStats[StatType.INT] ?: 0) + (effectiveStats[StatType.FTH] ?: 0)
 }
 
 // ==========================================
@@ -134,7 +209,7 @@ data class Hero(
 /** 玩家公会状态 */
 data class PlayerGuild(
     val guildRank: String = "F",
-    val gold: Int = 0,
+    val gold: Int = 500,
     val currentSupplies: Int = 10000,    // 测试用大补给
     val maxSupplies: Int = 10000,       // 公会等级决定上限
     val maxCarryItems: Int = 10,        // 探险可携带道具上限
@@ -205,6 +280,7 @@ data class ExpeditionSession(
     val posY: Int = 0,
     val party: List<PartySlot>,                 // 出战编队 (1-4人)
     val tactic: TacticType = TacticType.BALANCED,
+    val secondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
     val currentSupply: Int,
     val carriedItems: List<String> = emptyList(), // 携带的消耗品ID
     val backpack: List<String> = emptyList(),     // 探索中拾取的战利品ID
@@ -239,6 +315,9 @@ data class Monster(
     val dropChances: Map<String, Int> = emptyMap()
 ) {
     val isAlive: Boolean get() = currentHp > 0
+    val combatPower: Int get() = attack + defense + level * 2
+    /** 击败后奖励的经验值 */
+    val expReward: Int get() = 10 + level * 8
 }
 
 // ==========================================

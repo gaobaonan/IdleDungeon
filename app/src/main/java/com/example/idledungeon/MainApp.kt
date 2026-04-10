@@ -106,10 +106,12 @@ fun MainApp() {
         composable(Route.BLACKSMITH) {
             BlacksmithScreen(
                 shopLevel = state.gameState.guild.blacksmithLevel,
+                gold = state.gameState.guild.gold,
                 availableItems = state.shopEquipments,
                 investCost = vm.getInvestCost("blacksmith"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("blacksmith") },
+                onRefresh = { vm.debugRefreshShops() },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -117,10 +119,12 @@ fun MainApp() {
         composable(Route.ITEM_SHOP) {
             ItemShopScreen(
                 shopLevel = state.gameState.guild.itemShopLevel,
+                gold = state.gameState.guild.gold,
                 availableItems = state.shopConsumables,
                 investCost = vm.getInvestCost("item_shop"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("item_shop") },
+                onRefresh = { vm.debugRefreshShops() },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -136,21 +140,32 @@ fun MainApp() {
 
         composable(Route.HERO_DETAIL) { backStackEntry ->
             val heroId = backStackEntry.arguments?.getString("heroId") ?: return@composable
-            val hero = state.heroes.find { it.id == heroId } ?: return@composable
+            // 已招募 + 酒馆待招募 都能查看详情
+            val hero = state.heroes.find { it.id == heroId }
+                ?: state.recruitableHeroes.find { it.id == heroId }
+                ?: return@composable
+            val isRecruited = state.heroes.any { it.id == heroId }
             HeroDetailScreen(
                 hero = hero,
+                inventory = if (isRecruited) state.inventory else emptyList(),
                 onBack = { navController.popBackStackSafe() },
                 onEditName = { /* TODO: 弹出对话框 */ },
                 onEditPortrait = { /* TODO: 调用图片选择器 */ },
                 onChangeClass = { /* TODO: 弹出职业选择 */ },
-                onChangeEquipment = { /* TODO: 弹出装备选择 */ }
+                onEquip = { item -> if (isRecruited) vm.equipItem(heroId, item) },
+                onUnequip = { slot -> if (isRecruited) vm.unequipItem(heroId, slot) },
+                meetsRequirements = { h, i -> vm.meetsRequirements(h, i) },
+                onAllocateStat = { stat -> vm.allocateStatPoint(heroId, stat) },
+                onAllocateHp = { vm.allocateHpPoint(heroId) },
+                onAllocateMp = { vm.allocateMpPoint(heroId) }
             )
         }
 
         composable(Route.INVENTORY) {
             InventoryScreen(
                 items = state.inventory,
-                onItemClick = { /* TODO: 弹出物品详情 */ },
+                gold = state.gameState.guild.gold,
+                onSellItem = { vm.sellItem(it) },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -168,6 +183,7 @@ fun MainApp() {
             DungeonScreen(
                 floor = state.currentFloor,
                 expedition = state.expedition,
+                heroes = state.heroes,
                 deepestFloor = state.gameState.deepestFloorReached,
                 onDepart = { navController.navigateSafe(Route.PARTY_SETUP) },
                 onBack = { navController.popBackStackSafe() },
@@ -193,11 +209,14 @@ fun MainApp() {
         composable(Route.TACTIC_SETUP) {
             TacticSetupScreen(
                 selectedTactic = state.selectedTactic,
+                selectedSecondaryTactic = state.selectedSecondaryTactic,
                 consumables = state.inventory.filter { it.type == com.example.idledungeon.model.ItemType.CONSUMABLE },
                 carriedItemIds = state.carriedItemIds,
                 maxCarry = state.gameState.guild.maxCarryItems,
                 onTacticChange = { vm.setTactic(it) },
-                onToggleItem = { vm.toggleCarryItem(it) },
+                onSecondaryTacticChange = { vm.setSecondaryTactic(it) },
+                onAddItem = { vm.addCarryItem(it) },
+                onRemoveItem = { vm.removeCarryItem(it) },
                 onConfirm = {
                     vm.startExpedition()
                     navController.popBackStack(Route.DUNGEON, inclusive = false)

@@ -20,8 +20,8 @@ object DungeonGenerator {
     private const val DEFAULT_WIDTH = 45
     private const val DEFAULT_HEIGHT = 32
     private const val MARGIN = 2
-    private const val TARGET_ROOMS = 22
-    private const val MAX_ATTEMPTS = 150
+    private const val TARGET_ROOMS = 45
+    private const val MAX_ATTEMPTS = 300
     private const val W_STRAIGHT = 40
     private const val W_L_SHAPED = 60
 
