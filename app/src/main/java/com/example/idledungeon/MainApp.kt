@@ -57,7 +57,11 @@ fun MainApp() {
                     vm.requestNewGame()
                     navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
                 },
-                onExit = { /* 由 Activity 处 */ }
+                onExit = { /* 由 Activity 处 */ },
+                onTestMode = {  // [DEBUG] 发布前删除
+                    vm.startTestMode()
+                    navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
+                }
             )
         }
 
@@ -157,7 +161,8 @@ fun MainApp() {
                 meetsRequirements = { h, i -> vm.meetsRequirements(h, i) },
                 onAllocateStat = { stat -> vm.allocateStatPoint(heroId, stat) },
                 onAllocateHp = { vm.allocateHpPoint(heroId) },
-                onAllocateMp = { vm.allocateMpPoint(heroId) }
+                onAllocateMp = { vm.allocateMpPoint(heroId) },
+                onDebugAddProficiency = { if (isRecruited) vm.debugAddProficiency(heroId) }  // [DEBUG] 发布前删除
             )
         }
 
@@ -165,7 +170,8 @@ fun MainApp() {
             InventoryScreen(
                 items = state.inventory,
                 gold = state.gameState.guild.gold,
-                onSellItem = { vm.sellItem(it) },
+                onSellOne = { vm.sellOne(it) },
+                onSellAll = { vm.sellAll(it) },
                 onBack = { navController.popBackStackSafe() }
             )
         }

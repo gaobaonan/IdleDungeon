@@ -1,8 +1,6 @@
 package com.example.idledungeon.ui.screen
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -117,8 +115,9 @@ fun TacticSetupScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.outline)
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(grouped.entries.toList()) { (itemId, itemList) ->
+                // 不能用 LazyColumn: 父级是 verticalScroll, 嵌套两个无限高滚动容器会闪退
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    grouped.entries.forEach { (itemId, itemList) ->
                         val item = itemList.first()
                         val ownedCount = itemList.size
                         val carriedCount = carriedItemIds.count { it == itemId }

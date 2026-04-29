@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(./gradlew :app:compileDebugKotlin)",
-      "Bash(./gradlew compileDebugKotlin)"
+      "Bash(./gradlew compileDebugKotlin)",
+      "Bash(./gradlew assembleDebug)"
     ]
   }
 }

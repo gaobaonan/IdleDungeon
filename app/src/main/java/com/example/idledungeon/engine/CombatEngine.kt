@@ -3,6 +3,7 @@ package com.example.idledungeon.engine
 import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.MonsterRegistry
 import com.example.idledungeon.data.SpellRegistry
+import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
 import kotlin.random.Random
 
@@ -29,7 +30,9 @@ object CombatEngine {
         val updatedHeroes: List<Hero>,
         val log: List<String>,
         val droppedItems: List<String>,
-        val remainingCarriedItems: List<String>
+        val remainingCarriedItems: List<String>,
+        /** 本场战斗中曾倒下 (HP=0) 的英雄 ID */
+        val downedHeroIds: Set<String> = emptySet()
     )
 
     /**
@@ -58,6 +61,25 @@ object CombatEngine {
                 break
             }
             log.add("  --- Round $round / 第${round}回合 ---")
+
+            // ── 回合开始: 特质再生/枯萎 ──
+            for (i in heroStates.indices) {
+                val h = heroStates[i]
+                if (!h.isAlive) continue
+                val regenSources = traitsTriggering(h) { it.regenPerTurn != 0 }
+                val regen = h.regenPerTurn
+                if (regen != 0 && regenSources.isNotEmpty()) {
+                    val newHp = (h.currentHp + regen).coerceIn(0, h.maxHp)
+                    if (newHp != h.currentHp) {
+                        heroStates[i] = h.copy(currentHp = newHp)
+                        val sign = if (regen > 0) "+" else ""
+                        val parts = regenSources.joinToString("/") {
+                            val v = it.regenPerTurn; "${it.name}(${if (v > 0) "+" else ""}$v)"
+                        }
+                        log.add("  ${h.name} 触发 [$parts]: 总 ${sign}${regen} HP (HP:$newHp/${h.maxHp})")
+                    }
+                }
+            }
 
             // ── 英雄行动 ──
             for (i in heroStates.indices) {
@@ -89,38 +111,46 @@ object CombatEngine {
                 val spellAction = tryUseSpell(hero, target, log)
                 if (spellAction != null) {
                     val (updatedHero, spellResult) = spellAction
-                    heroStates[i] = updatedHero
+                    // 施法也使用武器，获得武器熟练度
+                    heroStates[i] = gainProficiency(updatedHero, EquipSlot.WEAPON, log)
                     applySpellResult(spellResult, heroStates, monsters, log)
                     continue
                 }
 
-                // 优先级 4: 普通攻击
-                val damage = (hero.attack - target.defense / 2).coerceAtLeast(1)
-                val newHp = (target.currentHp - damage).coerceAtLeast(0)
-                monsters[monsters.indexOf(target)] = target.copy(currentHp = newHp)
-                log.add("  ${hero.name} → ${target.name}: $damage dmg (HP:$newHp/${target.maxHp})")
+                // 优先级 4: 普通攻击 (含暴击/二连击/吸血)
+                heroStates[i] = gainProficiency(heroAttack(hero, monsters, log), EquipSlot.WEAPON, log)
             }
 
-            // ── 怪物行动 ──
+            // ── 怪物行动 (英雄方含闪避 + 受到伤害倍率) ──
             for (j in monsters.indices) {
                 val monster = monsters[j]
                 if (!monster.isAlive) continue
                 val target = heroStates.filter { it.isAlive }.randomOrNull() ?: break
 
                 val skill = monster.skills.firstOrNull { Random.nextInt(100) < it.triggerChance }
-                val damage: Int
+                val rawDmg: Int
                 val actionDesc: String
-
                 if (skill != null) {
-                    damage = ((monster.attack * skill.powerMultiplier).toInt() - target.defense / 2).coerceAtLeast(1)
+                    rawDmg = ((monster.attack * skill.powerMultiplier).toInt() - target.defense / 2).coerceAtLeast(1)
                     actionDesc = "${monster.name} [${skill.name}] → ${target.name}"
                 } else {
-                    damage = (monster.attack - target.defense / 2).coerceAtLeast(1)
+                    rawDmg = (monster.attack - target.defense / 2).coerceAtLeast(1)
                     actionDesc = "${monster.name} → ${target.name}"
                 }
 
                 val idx = heroStates.indexOf(target)
-                heroStates[idx] = target.copy(currentHp = (target.currentHp - damage).coerceAtLeast(0))
+
+                // 闪避检定: 命中则不掉血也不获得护甲熟练度
+                if (target.evasionChance > 0 && Random.nextInt(100) < target.evasionChance) {
+                    val srcs = traitsTriggering(target) { it.evasionChance > 0 }.joinToString("/") { it.name }
+                    log.add("  $actionDesc: ${target.name} 触发 [$srcs] 闪避！")
+                    continue
+                }
+
+                // 应用受到伤害倍率
+                val damage = (rawDmg * target.damageTakenMul).toInt().coerceAtLeast(1)
+                val damaged = target.copy(currentHp = (target.currentHp - damage).coerceAtLeast(0))
+                heroStates[idx] = gainProficiency(damaged, EquipSlot.ARMOR, log)
                 log.add("  $actionDesc: $damage dmg (HP:${heroStates[idx].currentHp}/${target.maxHp})")
             }
         }
@@ -149,6 +179,13 @@ object CombatEngine {
                         unspentSkillPoints = h.unspentSkillPoints + 1
                     )
                     log.add("  ★ ${h.name} Level Up! → Lv.$newLevel ★")
+                    // 升级有 10% 概率获得新正面特质
+                    val newTrait = TraitRegistry.rollLevelUpTrait(h.traits)
+                    if (newTrait != null) {
+                        h = TraitRegistry.applyTrait(h, newTrait)
+                        val tmpl = TraitRegistry.get(newTrait)
+                        log.add("  ✦ ${h.name} 觉醒新特质: ${tmpl.name} (${tmpl.description})")
+                    }
                 }
                 heroStates[i] = h
             }
@@ -165,13 +202,96 @@ object CombatEngine {
             log.add("  Loot / 战利品: ${drops.joinToString()}")
         }
 
+        // 记录本场倒下的英雄 (HP <= 0)
+        val downedIds = heroStates.filter { it.currentHp <= 0 }.map { it.id }.toSet()
+
         return CombatResult(
             victory = victory,
             updatedHeroes = heroStates,
             log = log,
             droppedItems = drops,
-            remainingCarriedItems = bag
+            remainingCarriedItems = bag,
+            downedHeroIds = downedIds
         )
+    }
+
+    // ============================
+    // 普攻 (含暴击 / 二连击 / 输出倍率 / 吸血)
+    // ============================
+
+    /**
+     * 英雄一次普攻动作, 可能因 doubleStrikeChance 多打一次.
+     * 返回更新后的英雄 (吸血回血会反映在 currentHp 上).
+     * 怪物列表会被原地修改.
+     */
+    private fun heroAttack(hero: Hero, monsters: MutableList<Monster>, log: MutableList<String>): Hero {
+        var h = hero
+        val doubleStrikeFired = h.doubleStrikeChance > 0 && Random.nextInt(100) < h.doubleStrikeChance
+        val attacks = if (doubleStrikeFired) 2 else 1
+        if (doubleStrikeFired) {
+            val srcs = traitsTriggering(h) { it.doubleStrikeChance > 0 }.joinToString("/") { it.name }
+            log.add("  ${h.name} 触发 [$srcs]: 二连击！")
+        }
+        for (n in 1..attacks) {
+            val target = monsters.filter { it.isAlive }.randomOrNull() ?: break
+            val baseDmg = (h.attack - target.defense / 2).coerceAtLeast(1)
+            var dmg = (baseDmg * h.damageDealtMul).toInt().coerceAtLeast(1)
+            val crit = h.critChance > 0 && Random.nextInt(100) < h.critChance
+            if (crit) {
+                dmg = (dmg * h.critMultiplier).toInt()
+                val srcs = traitsTriggering(h) { it.critChance > 0 }.joinToString("/") { it.name }
+                log.add("    ${h.name} 触发 [$srcs]: 暴击 ×${h.critMultiplier}!")
+            }
+            val targetIdx = monsters.indexOf(target)
+            val newTargetHp = (target.currentHp - dmg).coerceAtLeast(0)
+            monsters[targetIdx] = target.copy(currentHp = newTargetHp)
+            val seqTag = if (attacks > 1) " (#$n)" else ""
+            log.add("  ${h.name} → ${target.name}: $dmg dmg$seqTag (HP:$newTargetHp/${target.maxHp})")
+            // 吸血
+            if (h.lifestealRatio > 0f && dmg > 0) {
+                val heal = (dmg * h.lifestealRatio).toInt().coerceAtLeast(0)
+                if (heal > 0) {
+                    val newHp = (h.currentHp + heal).coerceAtMost(h.maxHp)
+                    if (newHp > h.currentHp) {
+                        val srcs = traitsTriggering(h) { it.lifestealRatio > 0f }.joinToString("/") { it.name }
+                        log.add("    ${h.name} 触发 [$srcs]: 吸血 +$heal HP (HP:$newHp/${h.maxHp})")
+                        h = h.copy(currentHp = newHp)
+                    }
+                }
+            }
+        }
+        return h
+    }
+
+    /** 找出英雄身上满足谓词的特质 (用于日志注明哪条特质触发了) */
+    private fun traitsTriggering(hero: Hero, predicate: (TraitTemplate) -> Boolean): List<TraitTemplate> {
+        return hero.traits.mapNotNull { id ->
+            val t = TraitRegistry.get(id)
+            if (predicate(t)) t else null
+        }
+    }
+
+    // ============================
+    // 熟练度
+    // ============================
+
+    /**
+     * 装备相应槽位时累计熟练度，等级提升会写入战斗日志。
+     * - WEAPON 槽: 普攻 / 施法时调用
+     * - ARMOR 槽: 挨打时调用
+     * 没装备 / 已满级 / 装备无 weaponType (如饰品) 时返回原 hero。
+     */
+    private fun gainProficiency(hero: Hero, slot: EquipSlot, log: MutableList<String>, amount: Int = 1): Hero {
+        val type = hero.equipment[slot]?.weaponType ?: return hero
+        val oldLevel = hero.proficiencyLevel(type)
+        if (oldLevel >= Hero.MAX_PROFICIENCY_LEVEL) return hero
+        val newXp = (hero.proficiencyXp[type] ?: 0) + amount
+        val updated = hero.copy(proficiencyXp = hero.proficiencyXp + (type to newXp))
+        val newLevel = updated.proficiencyLevel(type)
+        if (newLevel > oldLevel) {
+            log.add("  ★ ${hero.name} ${type.displayName()}熟练度↑ Lv.$newLevel (+${(newLevel * Hero.PROFICIENCY_BONUS_PER_LEVEL * 100).toInt()}%)")
+        }
+        return updated
     }
 
     // ============================

@@ -1,5 +1,6 @@
 package com.example.idledungeon.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -11,8 +12,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.idledungeon.R
 import com.example.idledungeon.model.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -20,10 +24,12 @@ import com.example.idledungeon.model.*
 fun InventoryScreen(
     items: List<Item>,
     gold: Int,
-    onSellItem: (Item) -> Unit,
+    onSellOne: (String) -> Unit,
+    onSellAll: (String) -> Unit,
     onBack: () -> Unit
 ) {
-    var selectedItem by remember { mutableStateOf<Item?>(null) }
+    // 存 ID 而不是 Item 实例, 卖完最后一个时仓库里再没这个 ID 也不会留下"幽灵"对话框引用
+    var selectedId by remember { mutableStateOf<String?>(null) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val tabs = listOf(
@@ -32,6 +38,8 @@ fun InventoryScreen(
         "Material / 材料" to ItemType.MATERIAL
     )
     val filteredItems = items.filter { it.type == tabs[selectedTab].second }
+    // 同 ID 物品堆叠成一格
+    val stacks = filteredItems.groupBy { it.id }.map { (_, list) -> list.first() to list.size }
 
     Scaffold(
         topBar = {
@@ -60,11 +68,11 @@ fun InventoryScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
             Text(
-                "Gold / 金币: ${gold} G",
+                "Gold / 金币: $gold G",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
-            if (filteredItems.isEmpty()) {
+            if (stacks.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text("Empty / 空", style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.outline)
@@ -76,50 +84,99 @@ fun InventoryScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredItems) { item ->
-                        InventorySlot(item) { selectedItem = item }
+                    items(stacks, key = { it.first.id }) { (item, count) ->
+                        InventorySlot(item, count) { selectedId = item.id }
                     }
                 }
             }
         }
     }
 
-    selectedItem?.let { item ->
+    // 通过 ID 查询当前堆叠 (count 实时反映, 卖出后会立刻刷新)
+    val selectedStack = selectedId?.let { id ->
+        val matching = items.filter { it.id == id }
+        if (matching.isEmpty()) null else matching.first() to matching.size
+    }
+    if (selectedStack == null && selectedId != null) {
+        // 卖完了, 自动关
+        LaunchedEffect(selectedId) { selectedId = null }
+    }
+    selectedStack?.let { (item, count) ->
         ItemDetailDialog(
             item = item,
-            onSell = {
-                onSellItem(item)
-                selectedItem = null
+            count = count,
+            onSellOne = { onSellOne(item.id) },
+            onSellAll = {
+                onSellAll(item.id)
+                selectedId = null
             },
-            onDismiss = { selectedItem = null }
+            onDismiss = { selectedId = null }
         )
     }
 }
 
+/** 稀有度对应的颜色 (重用于多个屏幕) */
 @Composable
-private fun InventorySlot(item: Item, onClick: () -> Unit) {
-    val borderColor = when (item.rarity) {
-        Rarity.COMMON -> MaterialTheme.colorScheme.outline
-        Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
-        Rarity.RARE -> MaterialTheme.colorScheme.tertiary
-        Rarity.EPIC -> MaterialTheme.colorScheme.error
-    }
+fun rarityColor(rarity: Rarity): Color = when (rarity) {
+    Rarity.COMMON -> MaterialTheme.colorScheme.outline
+    Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
+    Rarity.RARE -> MaterialTheme.colorScheme.tertiary
+    Rarity.EPIC -> MaterialTheme.colorScheme.error
+    Rarity.LEGENDARY -> Color(0xFFFFB300)  // 琥珀金
+}
+
+/** 通用物品图标，无图就用 empty 占位 */
+@Composable
+fun ItemIcon(item: Item, modifier: Modifier = Modifier) {
+    val resId = if (item.iconRes != 0) item.iconRes else R.drawable.empty
+    Image(
+        painter = painterResource(resId),
+        contentDescription = item.name,
+        modifier = modifier
+    )
+}
+
+@Composable
+private fun InventorySlot(item: Item, count: Int, onClick: () -> Unit) {
     OutlinedCard(
         modifier = Modifier.aspectRatio(1f).clickable(onClick = onClick),
-        border = CardDefaults.outlinedCardBorder().copy(width = 2.dp)
+        border = CardDefaults.outlinedCardBorder().copy(
+            width = 2.dp,
+            brush = androidx.compose.ui.graphics.SolidColor(rarityColor(item.rarity))
+        )
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = item.name.take(2),
-                    style = MaterialTheme.typography.titleSmall,
-                    textAlign = TextAlign.Center
-                )
-                if (item.rarity != Rarity.COMMON) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            ItemIcon(item, modifier = Modifier.fillMaxSize().padding(4.dp))
+            // 等级角标 (左上)
+            Text(
+                text = "L${item.equipLevel}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.align(Alignment.TopStart).padding(2.dp)
+            )
+            // 名称占底部
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                color = rarityColor(item.rarity),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
+            )
+            // 数量角标 (右下), 仅在 >1 时显示
+            if (count > 1) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(2.dp)
+                ) {
                     Text(
-                        text = item.rarity.name.take(1),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = borderColor
+                        "×$count",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
             }
@@ -130,7 +187,9 @@ private fun InventorySlot(item: Item, onClick: () -> Unit) {
 @Composable
 private fun ItemDetailDialog(
     item: Item,
-    onSell: () -> Unit,
+    count: Int,
+    onSellOne: () -> Unit,
+    onSellAll: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -141,16 +200,22 @@ private fun ItemDetailDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(item.name)
-                Text(
-                    item.rarity.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = when (item.rarity) {
-                        Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
-                        Rarity.RARE -> MaterialTheme.colorScheme.tertiary
-                        Rarity.EPIC -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurface
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ItemIcon(item, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text(item.name)
+                        if (count > 1) {
+                            Text("持有 ×$count",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
+                }
+                Text(
+                    "${item.rarity.displayName()} L${item.equipLevel}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = rarityColor(item.rarity)
                 )
             }
         },
@@ -164,7 +229,7 @@ private fun ItemDetailDialog(
                             EquipSlot.ACCESSORY -> "Accessory / 饰品"
                             null -> "Equipment / 装备"
                         }
-                        val weaponName = item.weaponType?.let { " (${it.name})" } ?: ""
+                        val weaponName = item.weaponType?.let { " (${it.displayName()})" } ?: ""
                         "$slotName$weaponName"
                     }
                     ItemType.CONSUMABLE -> "Consumable / 消耗品"
@@ -197,19 +262,48 @@ private fun ItemDetailDialog(
                         Text("  ${stat.name} >= $req", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
+                if (item.traits.isNotEmpty()) {
+                    Text("Traits / 特性:", style = MaterialTheme.typography.labelMedium)
+                    item.traits.forEach { tid ->
+                        Text("  • $tid",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary)
+                    }
+                }
                 HorizontalDivider()
-                Text("Sell price / 售价: ${item.sellPrice} G",
+                Text("Unit price / 单价: ${item.sellPrice} G",
                     style = MaterialTheme.typography.bodyMedium)
+                if (count > 1) {
+                    Text("Total / 全卖: ${item.sellPrice * count} G  (×$count)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.height(4.dp))
+                // 出售按钮放在 text 区, confirmButton 留给 Close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onSellOne,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) { Text("卖一个 (${item.sellPrice} G)") }
+                    if (count > 1) {
+                        Button(
+                            onClick = onSellAll,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            )
+                        ) { Text("全卖 ×$count") }
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(onClick = onSell, colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error
-            )) {
-                Text("Sell / 出售 (${item.sellPrice} G)")
-            }
-        },
-        dismissButton = {
             TextButton(onClick = onDismiss) { Text("Close / 关闭") }
         }
     )

@@ -3,146 +3,228 @@ package com.example.idledungeon.data
 import com.example.idledungeon.model.*
 
 /**
- * 怪物注册表 - 集中定义所有怪物模板
- * 战斗时通过 MonsterRegistry.spawn("goblin") 获取一个可变副本
+ * 怪物注册表 — 按等级 + 三种体型重新设计
+ *
+ *   Type A 高攻低防  (1-2 技能, 中等血)
+ *   Type B 攻防平均  (无技能, 中血)
+ *   Type C 低攻高防  (无技能, 高血)
+ *
+ * 每个等级 (L1-L11) 三只, CP 目标 = 等级×80, 上下浮动 ±20。
+ * 楼层 boss: 等级 = 楼层×3+1, 共 5 个 (L4 / L7 / L10 / L13 / L16)。
+ *
+ * CP = (ATK×10 + DEF×7 + HP) × (1 + 技能数×0.2)
  */
 object MonsterRegistry {
 
     private val templates = listOf(
-        // ──── 浅层 (1-5层) ────
-        Monster(
-            id = "slime", name = "史莱姆", level = 1,
-            currentHp = 20, maxHp = 20, attack = 4, defense = 1,
-            dropChances = mapOf("slime_gel" to 50, "monster_bone" to 20)
-        ),
-        Monster(
-            id = "goblin", name = "哥布林", level = 2,
-            currentHp = 35, maxHp = 35, attack = 8, defense = 3,
-            dropChances = mapOf("goblin_ear" to 40, "iron_ore" to 20, "rusty_dagger" to 5)
-        ),
-        Monster(
-            id = "skeleton", name = "骷髅兵", level = 3,
-            currentHp = 40, maxHp = 40, attack = 10, defense = 6,
-            skills = listOf(
-                MonsterSkill("sk_bone_strike", "骨击", "用骨棒猛击", SkillEffect.HEAVY_STRIKE, 1.3f, 20)
-            ),
-            dropChances = mapOf("monster_bone" to 50, "short_sword" to 8, "ancient_coin" to 5)
-        ),
-        Monster(
-            id = "giant_bat", name = "巨型蝙蝠", level = 2,
-            currentHp = 25, maxHp = 25, attack = 7, defense = 2,
-            dropChances = mapOf("monster_bone" to 25)
-        ),
-        Monster(
-            id = "mushroom", name = "毒蘑菇", level = 3,
-            currentHp = 30, maxHp = 30, attack = 6, defense = 3,
-            skills = listOf(
-                MonsterSkill("sk_spore", "孢子散布", "释放有毒孢子", SkillEffect.POISON, 0.4f, 35)
-            ),
-            dropChances = mapOf("antidote" to 30, "slime_gel" to 15)
-        ),
+        // ──── L1 (target ~80) ────
+        Monster(id = "giant_rat", name = "巨鼠", level = 1,
+            currentHp = 22, maxHp = 22, attack = 5, defense = 1,
+            skills = listOf(MonsterSkill("sk_rat_bite", "利齿啃咬", "致命咬伤", SkillEffect.HEAVY_STRIKE, 1.5f, 25)),
+            dropChances = mapOf("monster_bone" to 30, "slime_gel" to 5)),
+        Monster(id = "slime", name = "史莱姆", level = 1,
+            currentHp = 30, maxHp = 30, attack = 3, defense = 3,
+            dropChances = mapOf("slime_gel" to 50, "monster_bone" to 20)),
+        Monster(id = "spike_shell", name = "钉壳虫", level = 1,
+            currentHp = 30, maxHp = 30, attack = 2, defense = 4,
+            dropChances = mapOf("monster_bone" to 30, "iron_ore" to 10)),
 
-        // ──── 中层 (6-15层) ────
-        Monster(
-            id = "poison_spider", name = "毒蜘蛛", level = 6,
-            currentHp = 50, maxHp = 50, attack = 12, defense = 4,
-            skills = listOf(
-                MonsterSkill("sk_venom", "毒牙", "注入剧毒", SkillEffect.POISON, 0.5f, 30)
-            ),
-            dropChances = mapOf("spider_silk" to 40, "antidote" to 20)
-        ),
-        Monster(
-            id = "orc", name = "兽人战士", level = 8,
-            currentHp = 80, maxHp = 80, attack = 18, defense = 10,
-            skills = listOf(
-                MonsterSkill("sk_heavy_blow", "重锤", "蛮力一击", SkillEffect.HEAVY_STRIKE, 1.5f, 25)
-            ),
-            dropChances = mapOf("iron_ore" to 40, "chain_mail" to 3, "iron_ring" to 5)
-        ),
-        Monster(
-            id = "lizardman", name = "蜥蜴人", level = 7,
-            currentHp = 65, maxHp = 65, attack = 15, defense = 8,
-            skills = listOf(
-                MonsterSkill("sk_tail_whip", "尾击", "用尾巴横扫", SkillEffect.STUN, 0.6f, 20)
-            ),
-            dropChances = mapOf("iron_ore" to 25, "monster_bone" to 35, "iron_spear" to 4)
-        ),
-        Monster(
-            id = "ghost", name = "怨灵", level = 9,
-            currentHp = 55, maxHp = 55, attack = 20, defense = 3,
-            skills = listOf(
-                MonsterSkill("sk_wail", "怨嚎", "令人毛骨悚然的嚎叫", SkillEffect.STUN, 0.0f, 25),
-                MonsterSkill("sk_life_drain", "吸魂", "吸取生者的精气", SkillEffect.HEAL, 0.8f, 20)
-            ),
-            dropChances = mapOf("magic_crystal" to 10, "ancient_coin" to 15)
-        ),
+        // ──── L2 (target ~160) ────
+        Monster(id = "giant_bat", name = "巨型蝙蝠", level = 2,
+            currentHp = 40, maxHp = 40, attack = 9, defense = 2,
+            skills = listOf(MonsterSkill("sk_bat_drain", "吸血", "吸取生命", SkillEffect.HEAL, 0.7f, 30)),
+            dropChances = mapOf("monster_bone" to 25, "spider_silk" to 5)),
+        Monster(id = "goblin", name = "哥布林", level = 2,
+            currentHp = 60, maxHp = 60, attack = 6, defense = 5,
+            dropChances = mapOf("goblin_ear" to 40, "iron_ore" to 20, "small_iron_dagger" to 4)),
+        Monster(id = "mushroom_brute", name = "厚壳蘑菇", level = 2,
+            currentHp = 60, maxHp = 60, attack = 4, defense = 8,
+            dropChances = mapOf("slime_gel" to 30, "monster_bone" to 25)),
 
-        // ──── 深层 (16-30层) ────
-        Monster(
-            id = "dark_knight", name = "暗黑骑士", level = 15,
-            currentHp = 150, maxHp = 150, attack = 30, defense = 20,
-            skills = listOf(
-                MonsterSkill("sk_dark_slash", "暗斩", "黑暗力量附着的斩击", SkillEffect.HEAVY_STRIKE, 1.8f, 30),
-                MonsterSkill("sk_stun_bash", "盾击", "用盾牌猛击造成眩晕", SkillEffect.STUN, 0.8f, 15)
-            ),
-            dropChances = mapOf("dark_shard" to 35, "long_sword" to 10, "plate_armor" to 5, "magic_crystal" to 15)
-        ),
-        Monster(
-            id = "golem", name = "石像鬼", level = 12,
-            currentHp = 120, maxHp = 120, attack = 22, defense = 25,
-            skills = listOf(
-                MonsterSkill("sk_slam", "石拳", "坚硬的岩石拳头", SkillEffect.HEAVY_STRIKE, 1.6f, 20)
-            ),
-            dropChances = mapOf("iron_ore" to 60, "magic_crystal" to 8, "ancient_coin" to 10)
-        ),
-        Monster(
-            id = "harpy", name = "鹰身女妖", level = 13,
-            currentHp = 90, maxHp = 90, attack = 24, defense = 10,
-            skills = listOf(
-                MonsterSkill("sk_screech", "尖啸", "刺耳的叫声使人眩晕", SkillEffect.STUN, 0.0f, 30),
-                MonsterSkill("sk_dive", "俯冲", "从高处猛扑而下", SkillEffect.HEAVY_STRIKE, 1.7f, 20)
-            ),
-            dropChances = mapOf("spider_silk" to 20, "agility_amulet" to 3, "monster_bone" to 30)
-        ),
+        // ──── L3 (target ~240) ────
+        Monster(id = "carrion_bat", name = "食腐蝠", level = 3,
+            currentHp = 55, maxHp = 55, attack = 14, defense = 4,
+            skills = listOf(MonsterSkill("sk_carrion_strike", "暗袭", "扑面突袭", SkillEffect.HEAVY_STRIKE, 1.6f, 30)),
+            dropChances = mapOf("monster_bone" to 35, "antidote" to 10)),
+        Monster(id = "goblin_warrior", name = "哥布林战士", level = 3,
+            currentHp = 90, maxHp = 90, attack = 10, defense = 7,
+            dropChances = mapOf("goblin_ear" to 50, "iron_ore" to 30, "iron_shortsword" to 5)),
+        Monster(id = "carapace_drone", name = "甲壳虫", level = 3,
+            currentHp = 100, maxHp = 100, attack = 6, defense = 12,
+            dropChances = mapOf("monster_bone" to 35, "iron_ore" to 30, "spider_silk" to 15)),
 
-        // ──── Boss ────
-        Monster(
-            id = "boss_minotaur", name = "牛头人领主", level = 10,
-            currentHp = 200, maxHp = 200, attack = 25, defense = 15,
+        // ──── L4 (target ~320) ────
+        Monster(id = "shadow_imp", name = "暗影小鬼", level = 4,
+            currentHp = 80, maxHp = 80, attack = 19, defense = 5,
+            skills = listOf(MonsterSkill("sk_imp_fireball", "火球", "投出小火球", SkillEffect.HEAVY_STRIKE, 1.6f, 30)),
+            dropChances = mapOf("dark_shard" to 15, "magic_crystal" to 10)),
+        Monster(id = "skeleton_soldier", name = "骷髅兵", level = 4,
+            currentHp = 130, maxHp = 130, attack = 13, defense = 8,
+            dropChances = mapOf("monster_bone" to 60, "iron_ore" to 30)),
+        Monster(id = "iron_beetle", name = "铁甲虫", level = 4,
+            currentHp = 140, maxHp = 140, attack = 8, defense = 16,
+            dropChances = mapOf("iron_ore" to 60, "monster_bone" to 30)),
+
+        // ──── L5 (target ~400) ────
+        Monster(id = "venom_spider", name = "毒蛛", level = 5,
+            currentHp = 120, maxHp = 120, attack = 23, defense = 5,
+            skills = listOf(MonsterSkill("sk_venom_fang", "毒牙", "注入剧毒", SkillEffect.POISON, 0.5f, 35)),
+            dropChances = mapOf("spider_silk" to 50, "antidote" to 25)),
+        Monster(id = "ghoul", name = "食尸鬼", level = 5,
+            currentHp = 170, maxHp = 170, attack = 16, defense = 10,
+            dropChances = mapOf("monster_bone" to 50, "antidote" to 15, "ancient_coin" to 5)),
+        Monster(id = "dwarven_guard", name = "矮人守卫", level = 5,
+            currentHp = 170, maxHp = 170, attack = 9, defense = 20,
+            dropChances = mapOf("iron_ore" to 50, "monster_bone" to 30, "chain_mail" to 4)),
+
+        // ──── L6 (target ~480) ────
+        Monster(id = "twin_blades", name = "双刃刺客", level = 6,
+            currentHp = 130, maxHp = 130, attack = 28, defense = 6,
+            skills = listOf(MonsterSkill("sk_double_strike", "双连击", "连续两击", SkillEffect.HEAVY_STRIKE, 1.4f, 40)),
+            dropChances = mapOf("spider_silk" to 30, "monster_bone" to 30, "dark_shard" to 10)),
+        Monster(id = "orc_warrior", name = "兽人战士", level = 6,
+            currentHp = 200, maxHp = 200, attack = 19, defense = 12,
+            dropChances = mapOf("iron_ore" to 45, "monster_bone" to 35, "iron_long_sword" to 5)),
+        Monster(id = "stone_guard", name = "石卫兵", level = 6,
+            currentHp = 210, maxHp = 210, attack = 11, defense = 25,
+            dropChances = mapOf("iron_ore" to 60, "monster_bone" to 30)),
+
+        // ──── L7 (target ~560) ────
+        Monster(id = "shadow_blade", name = "暗刃", level = 7,
+            currentHp = 145, maxHp = 145, attack = 32, defense = 7,
+            skills = listOf(MonsterSkill("sk_assassinate", "暗杀", "致命突袭", SkillEffect.HEAVY_STRIKE, 2.0f, 30)),
+            dropChances = mapOf("dark_shard" to 30, "spider_silk" to 25, "magic_crystal" to 15)),
+        Monster(id = "ogre", name = "食人魔", level = 7,
+            currentHp = 240, maxHp = 240, attack = 22, defense = 14,
+            dropChances = mapOf("monster_bone" to 55, "iron_ore" to 40, "knight_great_sword" to 4)),
+        Monster(id = "citadel_guard", name = "王城守卫", level = 7,
+            currentHp = 240, maxHp = 240, attack = 12, defense = 28,
+            dropChances = mapOf("iron_ore" to 50, "monster_bone" to 35, "plate_armor" to 5)),
+
+        // ──── L8 (target ~640) ────
+        Monster(id = "demon_imp", name = "恶魔小鬼", level = 8,
+            currentHp = 160, maxHp = 160, attack = 38, defense = 8,
+            skills = listOf(MonsterSkill("sk_hellfire", "地狱火", "灼烧之力", SkillEffect.HEAVY_STRIKE, 1.8f, 30)),
+            dropChances = mapOf("dark_shard" to 25, "magic_crystal" to 30, "lich_phylactery" to 3)),
+        Monster(id = "werewolf", name = "狼人", level = 8,
+            currentHp = 280, maxHp = 280, attack = 25, defense = 16,
+            dropChances = mapOf("monster_bone" to 60, "spider_silk" to 25, "ancient_coin" to 15)),
+        Monster(id = "iron_titan", name = "钢铁泰坦", level = 8,
+            currentHp = 280, maxHp = 280, attack = 13, defense = 32,
+            dropChances = mapOf("iron_ore" to 70, "monster_bone" to 40, "magic_crystal" to 15)),
+
+        // ──── L9 (target ~720) ────
+        Monster(id = "frost_wraith", name = "寒冰幽魂", level = 9,
+            currentHp = 175, maxHp = 175, attack = 35, defense = 9,
             skills = listOf(
-                MonsterSkill("sk_charge", "狂暴冲锋", "不可阻挡的冲撞", SkillEffect.HEAVY_STRIKE, 2.0f, 25),
-                MonsterSkill("sk_roar", "战吼", "震慑敌人使其眩晕", SkillEffect.STUN, 0.0f, 20)
+                MonsterSkill("sk_ice_lance", "冰刺", "尖锐冰矛", SkillEffect.HEAVY_STRIKE, 1.7f, 30),
+                MonsterSkill("sk_frost_wail", "寒嚎", "冷气惊魂", SkillEffect.STUN, 0.0f, 25)
             ),
-            dropChances = mapOf("minotaur_horn" to 50, "greatsword" to 15, "magic_crystal" to 40)
-        ),
-        Monster(
-            id = "boss_lich", name = "巫妖", level = 20,
-            currentHp = 180, maxHp = 180, attack = 35, defense = 12,
+            dropChances = mapOf("magic_crystal" to 35, "dark_shard" to 25, "ancient_coin" to 15)),
+        Monster(id = "death_knight_lesser", name = "死亡骑士", level = 9,
+            currentHp = 320, maxHp = 320, attack = 29, defense = 18,
+            dropChances = mapOf("dark_shard" to 50, "magic_crystal" to 30, "iron_long_sword" to 8)),
+        Monster(id = "bone_golem", name = "骸骨魔像", level = 9,
+            currentHp = 320, maxHp = 320, attack = 15, defense = 36,
+            dropChances = mapOf("monster_bone" to 80, "magic_crystal" to 25, "dark_shard" to 15)),
+
+        // ──── L10 (target ~800) ────
+        Monster(id = "shadow_dragon_whelp", name = "影龙幼崽", level = 10,
+            currentHp = 195, maxHp = 195, attack = 38, defense = 10,
             skills = listOf(
-                MonsterSkill("sk_drain", "生命汲取", "吸取生命回复自身", SkillEffect.HEAL, 1.2f, 25),
-                MonsterSkill("sk_curse", "诅咒", "诅咒目标持续受到伤害", SkillEffect.POISON, 0.8f, 30),
-                MonsterSkill("sk_soul_blast", "灵魂冲击", "强大的魔法打击", SkillEffect.HEAVY_STRIKE, 2.2f, 20)
+                MonsterSkill("sk_dark_breath", "黑暗吐息", "腐蚀气息", SkillEffect.HEAVY_STRIKE, 2.0f, 30),
+                MonsterSkill("sk_shadow_step", "影遁", "暗影回避", SkillEffect.HEAL, 0.8f, 25)
             ),
-            dropChances = mapOf("lich_phylactery" to 30, "arcane_scepter" to 10, "prayer_ring" to 15, "magic_crystal" to 60)
-        ),
-        Monster(
-            id = "boss_dragon_whelp", name = "幼龙", level = 25,
-            currentHp = 350, maxHp = 350, attack = 40, defense = 28,
+            dropChances = mapOf("dragon_scale" to 8, "magic_crystal" to 50, "dark_shard" to 30)),
+        Monster(id = "abyssal_warrior", name = "深渊战士", level = 10,
+            currentHp = 360, maxHp = 360, attack = 31, defense = 20,
+            dropChances = mapOf("dark_shard" to 50, "magic_crystal" to 40, "ancient_coin" to 20)),
+        Monster(id = "ancient_construct", name = "古老构造体", level = 10,
+            currentHp = 360, maxHp = 360, attack = 17, defense = 40,
+            dropChances = mapOf("iron_ore" to 80, "magic_crystal" to 30, "lich_phylactery" to 8)),
+
+        // ──── L11 (target ~880) ────
+        Monster(id = "hellfire_imp", name = "地狱火妖", level = 11,
+            currentHp = 210, maxHp = 210, attack = 42, defense = 11,
             skills = listOf(
-                MonsterSkill("sk_fire_breath", "吐息", "灼热的龙焰吞噬一切", SkillEffect.HEAVY_STRIKE, 2.5f, 20),
-                MonsterSkill("sk_tail_slam", "龙尾横扫", "巨尾横扫前排", SkillEffect.STUN, 1.0f, 15),
-                MonsterSkill("sk_dragon_roar", "龙吼", "令人腿软的威压", SkillEffect.STUN, 0.0f, 25)
+                MonsterSkill("sk_hellfire_blast", "烈焰冲击", "炽焰一击", SkillEffect.HEAVY_STRIKE, 2.0f, 30),
+                MonsterSkill("sk_burning_curse", "燃焰诅咒", "持续灼烧", SkillEffect.POISON, 0.6f, 30)
             ),
-            dropChances = mapOf("dragon_scale" to 40, "flame_blade" to 8, "dragon_eye_amulet" to 5, "magic_crystal" to 70)
-        )
+            dropChances = mapOf("magic_crystal" to 50, "dark_shard" to 40, "lich_phylactery" to 10, "flame_sword" to 5)),
+        Monster(id = "crimson_lord", name = "赤红领主", level = 11,
+            currentHp = 400, maxHp = 400, attack = 34, defense = 22,
+            dropChances = mapOf("dark_shard" to 50, "magic_crystal" to 40, "dragon_scale" to 10)),
+        Monster(id = "void_titan", name = "虚空泰坦", level = 11,
+            currentHp = 400, maxHp = 400, attack = 18, defense = 44,
+            dropChances = mapOf("magic_crystal" to 50, "dark_shard" to 30, "ancient_coin" to 25)),
+
+        // ════════════════════════════════════════════════
+        //  楼层 BOSS  (level = floor × 3 + 1, 3 技能, CP ≈ level × 150)
+        // ════════════════════════════════════════════════
+
+        // Floor 1 boss (L4, target ~600)
+        Monster(id = "boss_rat_king", name = "鼠王", level = 4,
+            currentHp = 150, maxHp = 150, attack = 16, defense = 12,
+            skills = listOf(
+                MonsterSkill("sk_king_bite", "王者啃咬", "王者一咬", SkillEffect.HEAVY_STRIKE, 1.8f, 35),
+                MonsterSkill("sk_rat_roar", "鼠王战吼", "震慑全场", SkillEffect.STUN, 0.0f, 25),
+                MonsterSkill("sk_feast", "啃食愈合", "啃食回复", SkillEffect.HEAL, 0.8f, 20)
+            ),
+            dropChances = mapOf("monster_bone" to 80, "slime_gel" to 60, "ancient_coin" to 30, "iron_ring" to 15)),
+
+        // Floor 2 boss (L7, target ~1050)
+        Monster(id = "boss_goblin_chieftain", name = "哥布林酋长", level = 7,
+            currentHp = 250, maxHp = 250, attack = 28, defense = 20,
+            skills = listOf(
+                MonsterSkill("sk_chieftain_smash", "巨锤碎击", "碎骨重击", SkillEffect.HEAVY_STRIKE, 1.8f, 30),
+                MonsterSkill("sk_war_cry", "战吼", "战意鼓舞", SkillEffect.STUN, 0.0f, 25),
+                MonsterSkill("sk_rally_heal", "团结之力", "鼓舞自愈", SkillEffect.HEAL, 0.8f, 25)
+            ),
+            dropChances = mapOf("goblin_ear" to 100, "iron_ore" to 80, "magic_crystal" to 30, "iron_long_sword" to 15, "knight_great_sword" to 12)),
+
+        // Floor 3 boss (L10, target ~1500)
+        Monster(id = "boss_minotaur_lord", name = "牛头人领主", level = 10,
+            currentHp = 380, maxHp = 380, attack = 40, defense = 25,
+            skills = listOf(
+                MonsterSkill("sk_charge", "狂暴冲锋", "无可阻挡的冲锋", SkillEffect.HEAVY_STRIKE, 2.0f, 30),
+                MonsterSkill("sk_minotaur_roar", "战吼", "震撼魂魄", SkillEffect.STUN, 0.0f, 25),
+                MonsterSkill("sk_warlord_fury", "战王怒火", "怒火劈砍", SkillEffect.HEAVY_STRIKE, 1.5f, 30)
+            ),
+            dropChances = mapOf("minotaur_horn" to 60, "magic_crystal" to 50, "ancient_coin" to 30, "knight_great_sword" to 15)),
+
+        // Floor 4 boss (L13, target ~1950)
+        Monster(id = "boss_death_general", name = "死灵将军", level = 13,
+            currentHp = 450, maxHp = 450, attack = 55, defense = 32,
+            skills = listOf(
+                MonsterSkill("sk_death_blade", "死亡之剑", "死神之剑斩落", SkillEffect.HEAVY_STRIKE, 2.2f, 30),
+                MonsterSkill("sk_dark_curse", "黑暗诅咒", "持续侵蚀", SkillEffect.POISON, 0.8f, 30),
+                MonsterSkill("sk_undead_call", "亡灵召唤", "召唤亡魂回血", SkillEffect.HEAL, 1.0f, 25)
+            ),
+            dropChances = mapOf("dark_shard" to 70, "magic_crystal" to 60, "lich_phylactery" to 25, "plate_armor" to 12)),
+
+        // Floor 5 boss (L16, target ~2400)
+        Monster(id = "boss_fire_drake", name = "火焰巨龙", level = 16,
+            currentHp = 550, maxHp = 550, attack = 70, defense = 38,
+            skills = listOf(
+                MonsterSkill("sk_fire_breath", "烈焰吐息", "焚天灭地", SkillEffect.HEAVY_STRIKE, 2.5f, 30),
+                MonsterSkill("sk_wing_smash", "龙翼震击", "翼震击晕", SkillEffect.STUN, 0.8f, 25),
+                MonsterSkill("sk_dragon_fury", "龙之怒火", "怒不可遏", SkillEffect.HEAVY_STRIKE, 2.0f, 30)
+            ),
+            dropChances = mapOf("dragon_scale" to 50, "flame_sword" to 12, "magic_crystal" to 80, "lich_phylactery" to 20, "ruby_gem_sword" to 5))
     ).associateBy { it.id }
 
-    /** 生成一个战斗用的怪物实例 (copy 确保不污染模板) */
+    /** 生成一个战斗用的怪物实例 (HP 已是实战值, 不再倍增) */
     fun spawn(id: String): Monster = templates[id]?.copy() ?: error("Unknown monster: $id")
 
     fun all(): List<Monster> = templates.values.toList()
 
-    /** 按楼层范围筛选适合的怪物 */
+    /** 楼层用: 按等级范围筛选普通怪物 (排除 Boss) */
     fun byLevelRange(minLevel: Int, maxLevel: Int): List<Monster> =
-        templates.values.filter { it.level in minLevel..maxLevel }
+        templates.values.filter {
+            it.level in minLevel..maxLevel && !it.id.startsWith("boss_")
+        }
+
+    /** 楼层用: 取指定等级的 Boss (如果存在) */
+    fun bossForLevel(level: Int): Monster? =
+        templates.values.firstOrNull { it.id.startsWith("boss_") && it.level == level }
 }

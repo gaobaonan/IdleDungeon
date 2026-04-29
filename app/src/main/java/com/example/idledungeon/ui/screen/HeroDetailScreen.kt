@@ -1,5 +1,6 @@
 package com.example.idledungeon.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.idledungeon.data.SpellRegistry
+import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
 
 /**
@@ -38,7 +40,8 @@ fun HeroDetailScreen(
     meetsRequirements: (Hero, Item) -> Boolean,
     onAllocateStat: (StatType) -> Unit = {},
     onAllocateHp: () -> Unit = {},
-    onAllocateMp: () -> Unit = {}
+    onAllocateMp: () -> Unit = {},
+    onDebugAddProficiency: (() -> Unit)? = null  // [DEBUG] 发布前删除
 ) {
     var selectedSlot by remember { mutableStateOf<EquipSlot?>(null) }
 
@@ -123,34 +126,34 @@ fun HeroDetailScreen(
                                        else "${stat.name}: $base"
                             Text(text, style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.weight(1f))
-                            if (hasPoints) {
-                                FilledIconButton(
-                                    onClick = { onAllocateStat(stat) },
-                                    modifier = Modifier.size(28.dp)
-                                ) { Text("+", style = MaterialTheme.typography.labelSmall) }
-                            }
+                            FilledIconButton(
+                                onClick = { onAllocateStat(stat) },
+                                enabled = hasPoints,
+                                modifier = Modifier.size(28.dp)
+                            ) { Text("+", style = MaterialTheme.typography.labelSmall) }
                         }
                     }
-                    // HP / MP 分配
-                    if (hasPoints) {
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = onAllocateHp,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("+50 HP") }
-                            OutlinedButton(
-                                onClick = onAllocateMp,
-                                modifier = Modifier.weight(1f)
-                            ) { Text("+20 MP") }
-                        }
-                        Text("Remaining / 剩余: ${hero.unspentStatPoints} pts",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary)
+                    // HP / MP 分配 (常驻，无点数时按钮置灰)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onAllocateHp,
+                            enabled = hasPoints,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("+50 HP") }
+                        OutlinedButton(
+                            onClick = onAllocateMp,
+                            enabled = hasPoints,
+                            modifier = Modifier.weight(1f)
+                        ) { Text("+20 MP") }
                     }
+                    Text("Remaining / 剩余: ${hero.unspentStatPoints} pts",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (hasPoints) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
@@ -165,13 +168,16 @@ fun HeroDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("${slot.name}: ", modifier = Modifier.width(100.dp))
+                                Text("${slot.name}: ", modifier = Modifier.width(80.dp))
                                 if (item != null) {
+                                    ItemIcon(item, modifier = Modifier.size(36.dp).clickable { selectedSlot = slot })
+                                    Spacer(Modifier.width(6.dp))
                                     TextButton(onClick = { selectedSlot = slot }) {
-                                        Text(item.name)
+                                        Text("${item.name}  L${item.equipLevel} ${item.rarity.displayName()}",
+                                            color = rarityColor(item.rarity))
                                     }
                                     TextButton(onClick = { onUnequip(slot) }) {
-                                        Text("Unequip / 卸下",
+                                        Text("卸下",
                                             color = MaterialTheme.colorScheme.error,
                                             style = MaterialTheme.typography.labelSmall)
                                     }
@@ -198,6 +204,36 @@ fun HeroDetailScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── 熟练度 ──
+            if (hero.proficiencyXp.isNotEmpty() || onDebugAddProficiency != null) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Proficiency / 熟练度", style = MaterialTheme.typography.titleSmall)
+                            if (onDebugAddProficiency != null) {
+                                TextButton(onClick = onDebugAddProficiency) {
+                                    Text("[DEBUG] +50 XP", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        if (hero.proficiencyXp.isEmpty()) {
+                            Text("No proficiency yet / 暂无熟练度",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            hero.proficiencyXp.forEach { (type, xp) ->
+                                ProficiencyRow(type, xp, hero.proficiencyLevel(type))
                             }
                         }
                     }
@@ -241,10 +277,21 @@ fun HeroDetailScreen(
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text("Traits / 特质", style = MaterialTheme.typography.titleSmall)
-                        hero.traits.forEach { trait ->
-                            val prefix = if (trait.isPositive) "+" else "-"
-                            Text("$prefix ${trait.name}: ${trait.description}",
-                                style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.height(4.dp))
+                        hero.traits.forEach { tid ->
+                            val tmpl = TraitRegistry.get(tid)
+                            val color = if (tmpl.isPositive) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.error
+                            val sign = if (tmpl.isPositive) "+" else "-"
+                            Row(modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(
+                                    "$sign ${tmpl.name}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = color
+                                )
+                                Text(tmpl.description, style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
@@ -316,18 +363,18 @@ private fun EquipCandidateCard(
 ) {
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(10.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(item.name, style = MaterialTheme.typography.titleSmall)
-                Text(
-                    item.rarity.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when (item.rarity) {
-                        Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
-                        Rarity.RARE -> MaterialTheme.colorScheme.tertiary
-                        Rarity.EPIC -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onSurface
-                    }
-                )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                ItemIcon(item, modifier = Modifier.size(40.dp))
+                Spacer(Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(item.name, style = MaterialTheme.typography.titleSmall,
+                        color = rarityColor(item.rarity))
+                    Text(
+                        "L${item.equipLevel}  ${item.rarity.displayName()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = rarityColor(item.rarity)
+                    )
+                }
             }
             if (item.baseValue > 0 && item.equipSlot != null) {
                 val label = when (item.equipSlot) {
@@ -344,7 +391,18 @@ private fun EquipCandidateCard(
                 Text(bonusText, style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary)
             }
-            // 需求显示
+            // 职业限制
+            val requiredClass = item.weaponType?.requiredClass()
+            if (requiredClass != null) {
+                val classOk = requiredClass == hero.heroClass
+                Text(
+                    "Class / 职业限定: ${requiredClass.name}${if (classOk) " OK" else " X"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (classOk) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.error
+                )
+            }
+            // 属性需求
             if (item.statRequirements.isNotEmpty()) {
                 val reqText = item.statRequirements.entries.joinToString("  ") { (stat, req) ->
                     val heroVal = hero.baseStats[stat] ?: 0
@@ -364,9 +422,42 @@ private fun EquipCandidateCard(
                 enabled = meetsReq,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (meetsReq) "Equip / 装备" else "Requirements not met / 属性不足")
+                val classMismatch = requiredClass != null && requiredClass != hero.heroClass
+                Text(when {
+                    meetsReq -> "Equip / 装备"
+                    classMismatch -> "Wrong class / 职业不符"
+                    else -> "Requirements not met / 属性不足"
+                })
             }
         }
+    }
+}
+
+@Composable
+private fun ProficiencyRow(type: WeaponType, xp: Int, level: Int) {
+    val maxLv = Hero.MAX_PROFICIENCY_LEVEL
+    val nextThreshold = if (level < maxLv) Hero.proficiencyXpForLevel(level + 1) else xp
+    val curThreshold = if (level > 0) Hero.proficiencyXpForLevel(level) else 0
+    val progress = if (level >= maxLv) 1f
+                   else (xp - curThreshold).toFloat() / (nextThreshold - curThreshold).coerceAtLeast(1)
+    val bonusPct = (level * Hero.PROFICIENCY_BONUS_PER_LEVEL * 100).toInt()
+    Column(modifier = Modifier.padding(vertical = 3.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("${type.displayName()}  Lv.$level / $maxLv",
+                style = MaterialTheme.typography.bodyMedium)
+            Text("+${bonusPct}%",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary)
+        }
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().height(6.dp)
+        )
+        Text(
+            if (level >= maxLv) "MAX" else "XP $xp / $nextThreshold",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

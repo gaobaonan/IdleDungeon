@@ -59,7 +59,7 @@ object DungeonGenerator {
         }
 
         // ── 特殊房间 + 事件 ──
-        placeSpecialRooms(grid, rooms)
+        placeSpecialRooms(grid, rooms, layer)
         val upIdx = 0
         val downIdx = rooms.indices.filter { it != 0 }
             .maxByOrNull { rooms[it].gen * 3 + manhattan(rooms[it], rooms[0]) } ?: 0
@@ -269,7 +269,7 @@ object DungeonGenerator {
     // 特殊房间
     // ═══════════════════════════════════════════
 
-    private fun placeSpecialRooms(grid: Array<Array<DungeonNode>>, rooms: List<RoomNode>) {
+    private fun placeSpecialRooms(grid: Array<Array<DungeonNode>>, rooms: List<RoomNode>, layer: Int) {
         if (rooms.size < 2) return
         val upIdx = 0
         val downIdx = rooms.indices.filter { it != 0 }
@@ -283,10 +283,12 @@ object DungeonGenerator {
         grid[rooms[upIdx].y][rooms[upIdx].x] = DungeonNode(NodeType.STAIRS, NodeEvent.STAIRS_UP)
         grid[rooms[downIdx].y][rooms[downIdx].x] = DungeonNode(NodeType.STAIRS, NodeEvent.STAIRS_DOWN)
         if (bossIdx != null) {
-            val bossId = MonsterRegistry.all().filter { it.id.startsWith("boss_") }.randomOrNull()?.id
-            if (bossId != null) {
+            // 楼层 boss 等级 = 楼层 × 3 + 1; 没设计的层级则跳过
+            val bossLevel = layer * 3 + 1
+            val boss = MonsterRegistry.bossForLevel(bossLevel)
+            if (boss != null) {
                 grid[rooms[bossIdx].y][rooms[bossIdx].x] = DungeonNode(
-                    NodeType.BOSS_ROOM, NodeEvent.BOSS_FIGHT, monsterIds = listOf(bossId)
+                    NodeType.BOSS_ROOM, NodeEvent.BOSS_FIGHT, monsterIds = listOf(boss.id)
                 )
             }
         }
@@ -304,27 +306,53 @@ object DungeonGenerator {
             if (i in specials) continue
             val r = rooms[i]; val cell = grid[r.y][r.x]
             if (cell.type == NodeType.WALL) continue
+            // 房间分布: 50% 战斗, 20% 守护宝藏, 20% 陷阱, 10% 解谜
             grid[r.y][r.x] = when (Random.nextInt(100)) {
-                in 0..34 -> {
-                    val m = MonsterRegistry.byLevelRange(1, layer * 2)
-                    cell.copy(event = NodeEvent.ENCOUNTER, monsterIds = if (m.isNotEmpty()) listOf(m.random().id) else emptyList())
-                }
-                in 35..54 -> cell.copy(event = NodeEvent.LOOT, lootTable = mapOf("iron_ore" to 50, "monster_bone" to 30, "magic_crystal" to 10))
-                in 55..64 -> cell.copy(event = NodeEvent.TRAP)
-                else -> cell
+                in 0..49  -> randomEncounterCell(cell, layer)
+                in 50..69 -> randomGuardedLootCell(cell, layer)
+                in 70..89 -> cell.copy(event = NodeEvent.TRAP)
+                else      -> randomPuzzleCell(cell)
             }
         }
-        for (y in grid.indices) {
-            for (x in grid[y].indices) {
-                if (grid[y][x].type != NodeType.CORRIDOR || grid[y][x].event != NodeEvent.NONE) continue
-                val roll = Random.nextInt(100)
-                if (roll < 3) grid[y][x] = grid[y][x].copy(event = NodeEvent.TRAP)
-                else if (roll < 6) {
-                    val m = MonsterRegistry.byLevelRange(1, layer * 2)
-                    if (m.isNotEmpty()) grid[y][x] = grid[y][x].copy(event = NodeEvent.ENCOUNTER, monsterIds = listOf(m.random().id))
-                }
-            }
-        }
+        // 走廊不再生成事件
+    }
+
+    /** 随机生成一个 1-4 只怪的遭遇房间 (本层怪物等级 = 楼层×2 ±1) */
+    private fun randomEncounterCell(cell: DungeonNode, layer: Int): DungeonNode {
+        val pool = monsterPoolForLayer(layer)
+        if (pool.isEmpty()) return cell.copy(event = NodeEvent.TRAP)  // 兜底
+        val count = Random.nextInt(1, 5)  // 1..4
+        val ids = List(count) { pool.random().id }
+        return cell.copy(event = NodeEvent.ENCOUNTER, monsterIds = ids)
+    }
+
+    /** 楼层对应的普通怪物池: 等级 = 楼层×2 ±1 (Floor 1: L1-3, Floor 2: L3-5, ...) */
+    private fun monsterPoolForLayer(layer: Int): List<Monster> {
+        val minL = (layer * 2 - 1).coerceAtLeast(1)
+        val maxL = layer * 2 + 1
+        return MonsterRegistry.byLevelRange(minL, maxL)
+    }
+
+    /** 解谜房间: INT 破解, 成功获得宝物 */
+    private fun randomPuzzleCell(cell: DungeonNode): DungeonNode {
+        val loot = mapOf(
+            "magic_crystal" to 70, "ancient_coin" to 50, "spider_silk" to 30,
+            "dark_shard" to 25, "minotaur_horn" to 12, "lich_phylactery" to 5
+        )
+        return cell.copy(event = NodeEvent.PUZZLE, lootTable = loot)
+    }
+
+    /** 守护宝藏: 1-4 只怪 + 战利品 (战胜后才开宝箱) */
+    private fun randomGuardedLootCell(cell: DungeonNode, layer: Int): DungeonNode {
+        val pool = monsterPoolForLayer(layer)
+        val loot = mapOf(
+            "iron_ore" to 70, "monster_bone" to 50, "magic_crystal" to 30,
+            "ancient_coin" to 25, "spider_silk" to 20, "dark_shard" to 12
+        )
+        if (pool.isEmpty()) return cell.copy(event = NodeEvent.LOOT, lootTable = loot)
+        val count = Random.nextInt(1, 5)
+        val ids = List(count) { pool.random().id }
+        return cell.copy(event = NodeEvent.GUARDED_LOOT, monsterIds = ids, lootTable = loot)
     }
 
     private fun manhattan(a: RoomNode, b: RoomNode): Int = abs(a.x - b.x) + abs(a.y - b.y)

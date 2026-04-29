@@ -2,6 +2,7 @@ package com.example.idledungeon.ui.screen
 
 import android.graphics.Paint as NativePaint
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,6 +22,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.idledungeon.model.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,31 +86,32 @@ fun DungeonScreen(
 
             HorizontalDivider()
 
+            // ── 中间: 队伍血蓝条 (固定在地图与日志之间) ──
+            if (expedition != null && expedition.party.isNotEmpty()) {
+                PartyHpMpBars(expedition, heroes)
+                HorizontalDivider()
+            }
+
             // ── 下半: 日志区 ──
             val logEntries = expedition?.combatLog ?: emptyList()
             val eventCards = remember(logEntries.size) { parseLogToCards(logEntries) }
+            var detailCard by remember { mutableStateOf<EventCardData?>(null) }
 
-            if (expedition != null && (expedition.party.isNotEmpty() || logEntries.isNotEmpty())) {
+            if (expedition != null && logEntries.isNotEmpty()) {
                 val listState = rememberLazyListState()
                 LaunchedEffect(eventCards.size) {
                     if (eventCards.isNotEmpty()) {
-                        listState.animateScrollToItem(eventCards.size) // +1 for status header
+                        listState.animateScrollToItem(eventCards.size - 1)
                     }
                 }
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // ── 置顶: 队伍状态栏 ──
-                    item(key = "party_status") {
-                        PartyStatusBar(expedition, heroes)
-                    }
-
-                    // ── 事件卡片列表 ──
                     items(eventCards, key = { it.index }) { card ->
-                        EventCard(card)
+                        EventCard(card) { detailCard = card }
                     }
                 }
             } else {
@@ -127,77 +132,109 @@ fun DungeonScreen(
                     modifier = Modifier.fillMaxWidth().padding(12.dp)
                 ) { Text("Depart / 出发") }
             }
+
+            // ── 事件详情临时页 ──
+            detailCard?.let { card ->
+                EventDetailDialog(card) { detailCard = null }
+            }
         }
     }
 }
 
 // ============================
-// 队伍状态栏
+// 队伍血蓝条 (固定在地图和日志之间)
 // ============================
 
 @Composable
-private fun PartyStatusBar(expedition: ExpeditionSession, allHeroes: List<Hero>) {
+private fun PartyHpMpBars(expedition: ExpeditionSession, allHeroes: List<Hero>) {
     val partyHeroes = expedition.party.mapNotNull { slot ->
         allHeroes.find { it.id == slot.heroId }
     }
+    if (partyHeroes.isEmpty()) return
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(10.dp).fillMaxWidth()) {
-            Text("Party Status / 队伍状态", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(4.dp))
-            if (partyHeroes.isEmpty()) {
-                Text("No party / 无队伍", style = MaterialTheme.typography.bodySmall)
-            } else {
-                partyHeroes.forEach { hero ->
-                    val hpRatio = if (hero.maxHp > 0) hero.currentHp.toFloat() / hero.maxHp else 0f
-                    val hpColor = when {
-                        hpRatio > 0.6f -> MaterialTheme.colorScheme.primary
-                        hpRatio > 0.3f -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.error
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("${hero.name} (${hero.heroClass.name})",
-                            style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "HP:${hero.currentHp}/${hero.maxHp}  MP:${hero.currentMp}/${hero.maxMp}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = hpColor
-                        )
-                    }
-                }
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            partyHeroes.forEach { hero ->
+                HeroHpMpRow(hero)
             }
-
-            // 携带物品
-            if (expedition.carriedItems.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                // 统计同名物品数量
-                val itemCounts = expedition.carriedItems.groupingBy { it }.eachCount()
-                val itemText = itemCounts.entries.joinToString("  ") { (id, count) ->
-                    val name = try { com.example.idledungeon.data.ItemRegistry.get(id).name } catch (_: Exception) { id }
-                    if (count > 1) "${name}x$count" else name
+            // 携带物品 + 背包 (压缩成单行)
+            val carryText = expedition.carriedItems.takeIf { it.isNotEmpty() }
+                ?.groupingBy { it }?.eachCount()
+                ?.entries?.joinToString("  ") { (id, c) ->
+                    val n = try { com.example.idledungeon.data.ItemRegistry.get(id).name } catch (_: Exception) { id }
+                    if (c > 1) "${n}x$c" else n
                 }
-                Text("Items / 携带: $itemText",
+            val lootText = expedition.backpack.takeIf { it.isNotEmpty() }
+                ?.groupingBy { it }?.eachCount()
+                ?.entries?.joinToString("  ") { (id, c) ->
+                    val n = try { com.example.idledungeon.data.ItemRegistry.get(id).name } catch (_: Exception) { id }
+                    if (c > 1) "${n}x$c" else n
+                }
+            if (carryText != null) {
+                Text("携带: $carryText",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-
-            // 背包
-            if (expedition.backpack.isNotEmpty()) {
-                val lootCounts = expedition.backpack.groupingBy { it }.eachCount()
-                val lootText = lootCounts.entries.joinToString("  ") { (id, count) ->
-                    val name = try { com.example.idledungeon.data.ItemRegistry.get(id).name } catch (_: Exception) { id }
-                    if (count > 1) "${name}x$count" else name
-                }
-                Text("Backpack / 背包: $lootText",
+            if (lootText != null) {
+                Text("背包: $lootText",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroHpMpRow(hero: Hero) {
+    val hpRatio = if (hero.maxHp > 0) hero.currentHp.toFloat() / hero.maxHp else 0f
+    val mpRatio = if (hero.maxMp > 0) hero.currentMp.toFloat() / hero.maxMp else 0f
+    val hpColor = when {
+        hpRatio > 0.6f -> Color(0xFF4CAF50)
+        hpRatio > 0.3f -> Color(0xFFFFA726)
+        else -> Color(0xFFE53935)
+    }
+    val mpColor = Color(0xFF2196F3)
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "${hero.name.take(10)} ${hero.heroClass.name.take(3)}",
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.width(110.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            // HP 条
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LinearProgressIndicator(
+                    progress = { hpRatio },
+                    color = hpColor,
+                    trackColor = hpColor.copy(alpha = 0.2f),
+                    modifier = Modifier.weight(1f).height(8.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("${hero.currentHp}/${hero.maxHp}",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.width(70.dp))
+            }
+            // MP 条 (没有 MP 上限的英雄不画)
+            if (hero.maxMp > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(
+                        progress = { mpRatio },
+                        color = mpColor,
+                        trackColor = mpColor.copy(alpha = 0.2f),
+                        modifier = Modifier.weight(1f).height(6.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("${hero.currentMp}/${hero.maxMp}",
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.width(70.dp))
+                }
             }
         }
     }
@@ -243,92 +280,129 @@ private fun buildCard(index: Int, lines: List<String>): EventCardData {
     val firstLine = lines.first()
     val type = when {
         firstLine.startsWith("==") -> CardType.FLOOR_TITLE
-        firstLine.contains("BOSS") || firstLine.contains("ENCOUNTER") -> CardType.COMBAT
-        firstLine.contains("LOOT") || firstLine.contains("宝箱") -> CardType.LOOT
+        firstLine.contains("BOSS") || firstLine.contains("ENCOUNTER")
+            || firstLine.contains("GUARDED") || firstLine.contains("守护") -> CardType.COMBAT
+        firstLine.contains("LOOT") || firstLine.contains("宝箱")
+            || firstLine.contains("PUZZLE") || firstLine.contains("解谜") -> CardType.LOOT
         firstLine.contains("TRAP") || firstLine.contains("陷阱") -> CardType.TRAP
         firstLine.contains(">>") || firstLine.contains("STAIRS") -> CardType.STAIR
         firstLine.startsWith("[") -> CardType.ROOM
         else -> CardType.SYSTEM
     }
-
-    // 对战斗卡片，提取摘要: 去掉逐回合明细，只保留开头/结果/掉落
-    val displayLines = if (type == CardType.COMBAT) summarizeCombatLog(lines) else lines
-
     return EventCardData(
         index = index,
         header = firstLine,
-        lines = displayLines.drop(1), // header 已经单独显示
+        lines = lines.drop(1),  // 全量明细 (不再过滤), header 单独显示
         cardType = type
     )
 }
 
-/** 从战斗日志中提取摘要 (敌方列表 + 结果 + 掉落) */
-private fun summarizeCombatLog(lines: List<String>): List<String> {
-    val result = mutableListOf<String>()
-    // 第一行 = 房间头
-    result.add(lines.first())
+@Composable
+private fun EventCard(card: EventCardData, onClick: () -> Unit) {
+    val containerColor = cardContainerColor(card.cardType)
+    val headerColor = cardHeaderColor(card.cardType)
+    val hasDetail = card.lines.isNotEmpty()
 
-    for (line in lines) {
-        val trimmed = line.trimStart()
-        when {
-            // 保留: 敌方信息
-            trimmed.startsWith("Enemies") || trimmed.startsWith("Party") -> result.add(line)
-            // 保留: 药水使用
-            trimmed.contains("uses") && (trimmed.contains("药水") || trimmed.contains("potion") || trimmed.contains("Potion")) -> result.add(line)
-            // 保留: 法术施放
-            trimmed.contains("casts [") -> result.add(line)
-            // 保留: 结果行
-            trimmed.startsWith("=== Victory") || trimmed.startsWith("=== Defeat") -> result.add(line)
-            // 保留: 掉落
-            trimmed.startsWith("Loot") || trimmed.startsWith("战利品") -> result.add(line)
-            // 保留: Boss 击败
-            trimmed.contains("Boss defeated") || trimmed.contains("Boss被击败") -> result.add(line)
-            // 保留: 全灭
-            trimmed.contains("wiped") || trimmed.contains("全灭") || trimmed.contains("Defeated by Boss") -> result.add(line)
-            // 丢弃: 逐回合攻击明细 (--- Round, → 伤害行)
+    Card(
+        modifier = Modifier.fillMaxWidth()
+            .then(if (hasDetail) Modifier.clickable(onClick = onClick) else Modifier),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                card.header,
+                style = MaterialTheme.typography.labelLarge,
+                color = headerColor,
+                modifier = Modifier.weight(1f)
+            )
+            if (hasDetail) {
+                Text("›", style = MaterialTheme.typography.titleMedium, color = headerColor)
+            }
         }
     }
-    return result
 }
 
 @Composable
-private fun EventCard(card: EventCardData) {
-    val containerColor = when (card.cardType) {
-        CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.primaryContainer
-        CardType.COMBAT -> MaterialTheme.colorScheme.errorContainer
-        CardType.LOOT -> MaterialTheme.colorScheme.tertiaryContainer
-        CardType.TRAP -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-        CardType.STAIR -> MaterialTheme.colorScheme.secondaryContainer
-        CardType.ROOM -> MaterialTheme.colorScheme.surfaceVariant
-        CardType.SYSTEM -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val headerColor = when (card.cardType) {
-        CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.onPrimaryContainer
-        CardType.COMBAT -> MaterialTheme.colorScheme.onErrorContainer
-        CardType.LOOT -> MaterialTheme.colorScheme.onTertiaryContainer
-        CardType.TRAP -> MaterialTheme.colorScheme.error
-        CardType.STAIR -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
+private fun cardContainerColor(t: CardType): Color = when (t) {
+    CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.primaryContainer
+    CardType.COMBAT -> MaterialTheme.colorScheme.errorContainer
+    CardType.LOOT -> MaterialTheme.colorScheme.tertiaryContainer
+    CardType.TRAP -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+    CardType.STAIR -> MaterialTheme.colorScheme.secondaryContainer
+    CardType.ROOM -> MaterialTheme.colorScheme.surfaceVariant
+    CardType.SYSTEM -> MaterialTheme.colorScheme.surfaceVariant
+}
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+@Composable
+private fun cardHeaderColor(t: CardType): Color = when (t) {
+    CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.onPrimaryContainer
+    CardType.COMBAT -> MaterialTheme.colorScheme.onErrorContainer
+    CardType.LOOT -> MaterialTheme.colorScheme.onTertiaryContainer
+    CardType.TRAP -> MaterialTheme.colorScheme.error
+    CardType.STAIR -> MaterialTheme.colorScheme.onSecondaryContainer
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+/**
+ * 事件详情临时页 - 点击日志条目后展开, 显示该事件的全部内容
+ * (战斗的逐回合伤害 / 陷阱解除判定全过程 / 解谜判定 / 全部 buff/debuff 触发)
+ */
+@Composable
+private fun EventDetailDialog(card: EventCardData, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Text(card.header, style = MaterialTheme.typography.labelLarge, color = headerColor)
-            if (card.lines.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
-                card.lines.forEach { line ->
-                    val lineColor = when {
-                        line.contains("Victory") || line.contains("胜利") -> MaterialTheme.colorScheme.primary
-                        line.contains("Defeat") || line.contains("败北") || line.contains("wiped") -> MaterialTheme.colorScheme.error
-                        line.contains("Loot") || line.contains("Obtained") || line.contains("获得") -> MaterialTheme.colorScheme.tertiary
-                        line.contains("casts") -> MaterialTheme.colorScheme.primary
-                        line.contains("uses") -> MaterialTheme.colorScheme.secondary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.85f),
+            shape = MaterialTheme.shapes.large,
+            color = cardContainerColor(card.cardType)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // 顶栏
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        card.header,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = cardHeaderColor(card.cardType),
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
                     }
-                    Text(line.trimStart(), style = MaterialTheme.typography.bodySmall, color = lineColor)
+                }
+                HorizontalDivider()
+                // 全量明细
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    items(card.lines) { line ->
+                        val color = when {
+                            line.contains("Victory") || line.contains("胜利") -> MaterialTheme.colorScheme.primary
+                            line.contains("Defeat") || line.contains("败北") || line.contains("wiped") -> MaterialTheme.colorScheme.error
+                            line.contains("Loot") || line.contains("Obtained") || line.contains("获得") -> MaterialTheme.colorScheme.tertiary
+                            line.contains("casts") -> MaterialTheme.colorScheme.primary
+                            line.contains("uses") -> MaterialTheme.colorScheme.secondary
+                            line.contains("暴击") -> MaterialTheme.colorScheme.error
+                            line.contains("闪避") -> MaterialTheme.colorScheme.tertiary
+                            line.contains("吸血") || line.contains("特质") -> MaterialTheme.colorScheme.primary
+                            line.contains("Round") || line.contains("回合") -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                        Text(
+                            line.trimStart(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = color
+                        )
+                    }
                 }
             }
         }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.MonsterRegistry
 import com.example.idledungeon.data.SpellRegistry
+import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
 import kotlinx.coroutines.Job
@@ -50,6 +51,134 @@ class GameViewModel : ViewModel() {
             )
         }
         refreshShops()
+    }
+
+    /**
+     * [DEBUG] 测试环境一键准备:
+     *   - 4 人满装备队伍 (战士/法师/牧师/游侠) Lv.10, 已编入 partySlots
+     *   - 公会满级, 商店满级, 100000 G
+     *   - 仓库塞满药水 + 材料, 携带槽预填 10 瓶药水
+     *   - 默认 BALANCED + STRATEGY 战术
+     * 发布前删除。
+     */
+    fun startTestMode() {
+        val warrior = buildTestHero("test_warrior", "战神测试者", HeroClass.WARRIOR)
+        val mage    = buildTestHero("test_mage", "法师测试者", HeroClass.MAGE)
+        val cleric  = buildTestHero("test_cleric", "牧师测试者", HeroClass.CLERIC)
+        val ranger  = buildTestHero("test_ranger", "游侠测试者", HeroClass.RANGER)
+        val testHeroes = listOf(warrior, mage, cleric, ranger)
+
+        val potionStock = buildList {
+            repeat(10) { add(ItemRegistry.get("health_potion")) }
+            repeat(10) { add(ItemRegistry.get("mana_potion")) }
+            repeat(5)  { add(ItemRegistry.get("great_health_potion")) }
+            repeat(5)  { add(ItemRegistry.get("great_mana_potion")) }
+            repeat(3)  { add(ItemRegistry.get("antidote")) }
+            repeat(5)  { add(ItemRegistry.get("ration")) }
+            // 一些素材方便测试出售
+            repeat(8)  { add(ItemRegistry.get("iron_ore")) }
+            repeat(5)  { add(ItemRegistry.get("monster_bone")) }
+            repeat(3)  { add(ItemRegistry.get("magic_crystal")) }
+        }
+
+        val carried = listOf(
+            "health_potion", "health_potion", "health_potion",
+            "great_health_potion", "great_health_potion",
+            "mana_potion", "mana_potion",
+            "great_mana_potion", "great_mana_potion",
+            "antidote"
+        )
+
+        val testGuild = PlayerGuild(
+            gold = 100_000,
+            guildLevel = 5, tavernLevel = 5,
+            blacksmithLevel = 8, itemShopLevel = 8,
+            maxSupplies = 10_500, currentSupplies = 10_500,
+            maxCarryItems = 30
+        )
+
+        _uiState.update {
+            GameUiState(
+                gameState = GameState(
+                    hasStarted = true,
+                    playerName = "[DEBUG] Tester",
+                    guild = testGuild,
+                    deepestFloorReached = 1
+                ),
+                heroes = testHeroes,
+                inventory = potionStock,
+                partySlots = listOf(
+                    PartySlot(warrior.id, Position.FRONT),
+                    PartySlot(ranger.id, Position.FRONT),
+                    PartySlot(mage.id, Position.BACK),
+                    PartySlot(cleric.id, Position.BACK)
+                ),
+                selectedTactic = TacticType.BALANCED,
+                selectedSecondaryTactic = SecondaryTactic.STRATEGY,
+                carriedItemIds = carried
+            )
+        }
+        refreshShops()
+    }
+
+    private fun buildTestHero(id: String, name: String, cls: HeroClass): Hero {
+        val level = 1
+        // L1 典型属性: 主属性 12, 副属性 4-5 (刚够装上最低装备)
+        val baseStats = when (cls) {
+            HeroClass.WARRIOR -> mapOf(StatType.STR to 12, StatType.DEX to 5, StatType.INT to 4,  StatType.FTH to 4)
+            HeroClass.MAGE    -> mapOf(StatType.STR to 4,  StatType.DEX to 5, StatType.INT to 12, StatType.FTH to 4)
+            HeroClass.CLERIC  -> mapOf(StatType.STR to 5,  StatType.DEX to 4, StatType.INT to 5,  StatType.FTH to 12)
+            HeroClass.RANGER  -> mapOf(StatType.STR to 4,  StatType.DEX to 12, StatType.INT to 4, StatType.FTH to 5)
+            HeroClass.NOVICE  -> mapOf(StatType.STR to 7,  StatType.DEX to 7, StatType.INT to 7,  StatType.FTH to 7)
+        }
+        // 全部用职业可穿的最低级装备 + L1 通用皮甲 + 铁戒指
+        val equipment: Map<EquipSlot, Item> = when (cls) {
+            HeroClass.WARRIOR -> mapOf(
+                EquipSlot.WEAPON    to ItemRegistry.get("rusty_iron_sword"),  // L1 COMMON
+                EquipSlot.ARMOR     to ItemRegistry.get("leather_armor"),      // L1 COMMON
+                EquipSlot.ACCESSORY to ItemRegistry.get("iron_ring")           // L1 COMMON
+            )
+            HeroClass.MAGE -> mapOf(
+                EquipSlot.WEAPON    to ItemRegistry.get("wooden_staff"),       // L1 COMMON
+                EquipSlot.ARMOR     to ItemRegistry.get("leather_armor"),
+                EquipSlot.ACCESSORY to ItemRegistry.get("iron_ring")
+            )
+            HeroClass.CLERIC -> mapOf(
+                EquipSlot.WEAPON    to ItemRegistry.get("wooden_bell"),        // L1 COMMON
+                EquipSlot.ARMOR     to ItemRegistry.get("leather_armor"),
+                EquipSlot.ACCESSORY to ItemRegistry.get("iron_ring")
+            )
+            HeroClass.RANGER -> mapOf(
+                // 弓类没有 L1, 最低是 hunting_bow (L2 UNCOMMON), 算这条线最差
+                EquipSlot.WEAPON    to ItemRegistry.get("hunting_bow"),
+                EquipSlot.ARMOR     to ItemRegistry.get("leather_armor"),
+                EquipSlot.ACCESSORY to ItemRegistry.get("iron_ring")
+            )
+            HeroClass.NOVICE -> emptyMap()
+        }
+        val maxHp = 50 + level * 10  // L1 = 60
+        val maxMp = 20 + level * 3   // L1 = 23
+        val spells = SpellRegistry.computeSpells(baseStats, level)
+        val initial = Hero(
+            id = id, name = name, portraitUri = null,
+            heroClass = cls, level = level,
+            currentHp = maxHp, maxHp = maxHp,
+            currentMp = maxMp, maxMp = maxMp,
+            baseStats = baseStats,
+            equipment = equipment,
+            spells = spells,
+            unspentStatPoints = 5,  // 测试加点 UI
+            unspentSkillPoints = 2
+        )
+        // 每个测试角色硬塞 2 条特质, 覆盖不同效果类型方便观察战斗触发
+        val testTraits = when (cls) {
+            HeroClass.WARRIOR -> listOf("trait_berserker", "trait_iron_skin")     // +25% 输出 / -20% 受伤
+            HeroClass.MAGE    -> listOf("trait_lethal_strike", "trait_wise")      // 10% 暴击 3x / INT+5
+            HeroClass.CLERIC  -> listOf("trait_regen", "trait_vampiric")          // 每回合 +10HP / 15% 吸血
+            HeroClass.RANGER  -> listOf("trait_shadow_step", "trait_wind_blade")  // 20% 闪避 / 15% 二连击
+            HeroClass.NOVICE  -> emptyList()
+        }
+        return testTraits.fold(initial) { h, tid -> TraitRegistry.applyTrait(h, tid) }
     }
 
     // TODO: fun loadGame() - 从 Room 读取存档
@@ -157,7 +286,7 @@ class GameViewModel : ViewModel() {
             }
 
             val spells = SpellRegistry.computeSpells(stats, level)
-            Hero(
+            val initial = Hero(
                 id = "recruit_$i",
                 name = "Adventurer ${i + 1} / 冒险者${i + 1}",
                 portraitUri = null,
@@ -168,11 +297,16 @@ class GameViewModel : ViewModel() {
                 baseStats = stats,
                 spells = spells
             )
+            // 滚特质并立即结算 HP/MP 加成
+            TraitRegistry.rollRecruitTraits().fold(initial) { h, tid ->
+                TraitRegistry.applyTrait(h, tid)
+            }
         }
     }
 
     private fun generateShopItems(shopLevel: Int, type: ItemType): List<Item> {
-        val pool = ItemRegistry.byType(type)
+        // forShop 已过滤 purchasable + equipLevel <= shopLevel
+        val pool = ItemRegistry.forShop(type, shopLevel)
         val count = (3 + shopLevel).coerceAtMost(pool.size)
         return pool.shuffled().take(count)
     }
@@ -197,7 +331,7 @@ class GameViewModel : ViewModel() {
             val item = state.shopEquipments.find { it.id == itemId }
                 ?: state.shopConsumables.find { it.id == itemId }
                 ?: return@update state
-            val cost = item.baseValue   // 购买价 = baseValue (售出价 = sellPrice = baseValue/2)
+            val cost = item.goldCost   // 购买价由 (等级×稀有度) 公式派生
             val guild = state.gameState.guild
             if (guild.gold < cost) return@update state
             state.copy(
@@ -213,11 +347,13 @@ class GameViewModel : ViewModel() {
     // 装备管理
     // ============================
 
-    /** 检查英雄是否满足物品的属性需求 */
+    /** 检查英雄是否满足物品的属性需求 + 职业限制 */
     fun meetsRequirements(hero: Hero, item: Item): Boolean {
-        return item.statRequirements.all { (stat, req) ->
+        val statsOk = item.statRequirements.all { (stat, req) ->
             (hero.baseStats[stat] ?: 0) >= req
         }
+        val classOk = item.weaponType?.requiredClass()?.let { it == hero.heroClass } ?: true
+        return statsOk && classOk
     }
 
     /** 装备物品: 从仓库取出 → 装到英雄身上 (旧装备退回仓库) */
@@ -292,6 +428,22 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    /** [DEBUG] 给当前装备的武器/护甲增加熟练度 XP，发布前删除 */
+    fun debugAddProficiency(heroId: String, amount: Int = 50) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            val types = listOfNotNull(
+                hero.equipment[EquipSlot.WEAPON]?.weaponType,
+                hero.equipment[EquipSlot.ARMOR]?.weaponType
+            ).distinct()
+            if (types.isEmpty()) return@update state
+            val newXp = hero.proficiencyXp.toMutableMap()
+            for (t in types) newXp[t] = (newXp[t] ?: 0) + amount
+            val newHero = hero.copy(proficiencyXp = newXp)
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
     /** 消耗 1 属性点，加 20 MP */
     fun allocateMpPoint(heroId: String) {
         _uiState.update { state ->
@@ -306,11 +458,12 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    /** 出售物品: 从仓库移除 → 获得金币 */
-    fun sellItem(item: Item) {
+    /** 卖出该 ID 的一件物品 (UI 推荐使用) */
+    fun sellOne(itemId: String) {
         _uiState.update { state ->
-            val idx = state.inventory.indexOfFirst { it.id == item.id }
+            val idx = state.inventory.indexOfFirst { it.id == itemId }
             if (idx < 0) return@update state
+            val item = state.inventory[idx]
             val newInventory = state.inventory.toMutableList().apply { removeAt(idx) }
             val guild = state.gameState.guild
             state.copy(
@@ -321,6 +474,26 @@ class GameViewModel : ViewModel() {
             )
         }
     }
+
+    /** 卖出该 ID 的全部物品 */
+    fun sellAll(itemId: String) {
+        _uiState.update { state ->
+            val matching = state.inventory.filter { it.id == itemId }
+            if (matching.isEmpty()) return@update state
+            val totalGold = matching.first().sellPrice * matching.size
+            val newInventory = state.inventory.filter { it.id != itemId }
+            val guild = state.gameState.guild
+            state.copy(
+                inventory = newInventory,
+                gameState = state.gameState.copy(
+                    guild = guild.copy(gold = guild.gold + totalGold)
+                )
+            )
+        }
+    }
+
+    /** 兼容旧调用 */
+    fun sellItem(item: Item) = sellOne(item.id)
 
     // ============================
     // 探险编队
@@ -548,7 +721,23 @@ class GameViewModel : ViewModel() {
             carriedItems = actualCarried,
             isExploring = true
         )
-        _uiState.update { it.copy(expedition = session, inventory = newInventory) }
+
+        // 出征队员: 状态置 DEPLOYED, 同时满血满蓝 (上一轮撤退保留下来的伤害此刻才修复)
+        val partyIds = state.partySlots.map { it.heroId }.toSet()
+        _uiState.update {
+            it.copy(
+                expedition = session,
+                currentFloor = null,
+                inventory = newInventory,
+                heroes = it.heroes.map { h ->
+                    if (h.id in partyIds) h.copy(
+                        status = HeroStatus.DEPLOYED,
+                        currentHp = h.maxHp,
+                        currentMp = h.maxMp
+                    ) else h
+                }
+            )
+        }
 
         // 启动协程驱动探索
         viewModelScope.launch {

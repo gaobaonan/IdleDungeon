@@ -10,9 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
-import com.example.idledungeon.model.EquipSlot
-import com.example.idledungeon.model.Item
-import com.example.idledungeon.model.Rarity
+import com.example.idledungeon.model.*
 
 /**
  * 铁匠铺界面
@@ -74,31 +72,29 @@ fun BlacksmithScreen(
 /** 商店物品卡片 - 铁匠铺 & 道具店共用 */
 @Composable
 fun ShopItemCard(item: Item, gold: Int, onBuy: () -> Unit) {
-    val price = item.baseValue
+    val price = item.goldCost
     val canAfford = gold >= price
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            ItemIcon(item, modifier = Modifier.size(48.dp))
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.name, style = MaterialTheme.typography.titleSmall)
-                    if (item.rarity != Rarity.COMMON) {
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            item.rarity.name,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = when (item.rarity) {
-                                Rarity.UNCOMMON -> MaterialTheme.colorScheme.primary
-                                Rarity.RARE -> MaterialTheme.colorScheme.tertiary
-                                Rarity.EPIC -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                    }
+                    Text(item.name, style = MaterialTheme.typography.titleSmall,
+                        color = rarityColor(item.rarity))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "L${item.equipLevel} ${item.rarity.displayName()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = rarityColor(item.rarity)
+                    )
                 }
-                Text(item.description, style = MaterialTheme.typography.bodySmall)
+                if (item.description.isNotEmpty()) {
+                    Text(item.description, style = MaterialTheme.typography.bodySmall)
+                }
                 if (item.baseValue > 0 && item.equipSlot != null) {
                     val label = when (item.equipSlot) {
                         EquipSlot.WEAPON -> "ATK"
@@ -116,7 +112,7 @@ fun ShopItemCard(item: Item, gold: Int, onBuy: () -> Unit) {
                 }
             }
             Button(onClick = onBuy, enabled = canAfford) {
-                Text("${price} G")
+                Text("$price G")
             }
         }
     }
