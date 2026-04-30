@@ -223,24 +223,27 @@ object SpellRegistry {
     fun byType(type: SpellType): List<SpellTemplate> = templates.values.filter { it.type == type }
 
     /**
-     * 根据英雄的基础属性和等级，计算应拥有的法术列表。
+     * 根据英雄的基础属性、等级、职业计算初始法术列表.
      *
-     * 规则:
-     *   - 魔法槽数 = INT / 5 (INT < 5 则 0)
-     *   - 奇迹槽数 = FTH / 5
-     *   - 每个槽位依次分配: 优先升级已有法术 (需等级达标)，否则学习新法术
-     *   - 升级所需等级: 1 + 3 * (目标阶级 - 1)
+     * - MAGE: 仅按 INT/5 分配 MAGIC 法术
+     * - CLERIC: 仅按 FTH/5 分配 MIRACLE 法术
+     * - 其他职业: 不分配任何法术 (无法施法)
+     *
+     * 每个槽位优先升级已有法术 (需等级达标 = 3*tier - 2), 否则学新.
      */
-    fun computeSpells(baseStats: Map<StatType, Int>, heroLevel: Int): List<HeroSpell> {
-        val magicSlots  = (baseStats[StatType.INT] ?: 0) / 5
-        val miracleSlots = (baseStats[StatType.FTH] ?: 0) / 5
-
-        val magicPool  = byType(SpellType.MAGIC).shuffled()
-        val miraclePool = byType(SpellType.MIRACLE).shuffled()
-
+    fun computeSpells(
+        baseStats: Map<StatType, Int>,
+        heroLevel: Int,
+        heroClass: HeroClass
+    ): List<HeroSpell> {
+        val (slots, pool) = when (heroClass) {
+            HeroClass.MAGE -> (baseStats[StatType.INT] ?: 0) / 5 to byType(SpellType.MAGIC)
+            HeroClass.CLERIC -> (baseStats[StatType.FTH] ?: 0) / 5 to byType(SpellType.MIRACLE)
+            else -> return emptyList()
+        }
+        if (slots == 0 || pool.isEmpty()) return emptyList()
         val result = mutableListOf<HeroSpell>()
-        allocateSlots(result, magicSlots, magicPool, heroLevel)
-        allocateSlots(result, miracleSlots, miraclePool, heroLevel)
+        allocateSlots(result, slots, pool.shuffled(), heroLevel)
         return result
     }
 

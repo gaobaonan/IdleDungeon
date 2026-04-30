@@ -345,10 +345,12 @@ object DungeonGenerator {
     /** 守护宝藏: 1-4 只怪 + 战利品 (战胜后才开宝箱) */
     private fun randomGuardedLootCell(cell: DungeonNode, layer: Int): DungeonNode {
         val pool = monsterPoolForLayer(layer)
-        val loot = mapOf(
+        val loot = mutableMapOf(
             "iron_ore" to 70, "monster_bone" to 50, "magic_crystal" to 30,
             "ancient_coin" to 25, "spider_silk" to 20, "dark_shard" to 12
         )
+        // 主线任务奖励: 第二层守卫宝箱 30% 几率掉"苔纹剑" (5 次没出有保底, 详见 ExplorationEngine)
+        if (layer == 2) loot[QUEST_EPIC_SWORD_ID] = 30
         if (pool.isEmpty()) return cell.copy(event = NodeEvent.LOOT, lootTable = loot)
         val count = Random.nextInt(1, 5)
         val ids = List(count) { pool.random().id }

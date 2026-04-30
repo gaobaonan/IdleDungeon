@@ -1,10 +1,15 @@
 package com.example.idledungeon.ui.screen
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,10 +18,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.idledungeon.data.SpellRegistry
 import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
+import com.example.idledungeon.ui.component.HeroAvatar
 
 /**
  * 英雄详情界面
@@ -32,9 +40,10 @@ fun HeroDetailScreen(
     hero: Hero,
     inventory: List<Item>,
     onBack: () -> Unit,
-    onEditName: () -> Unit,
-    onEditPortrait: () -> Unit,
-    onChangeClass: () -> Unit,
+    onRename: (String) -> Unit,
+    onPortraitSelected: (String?) -> Unit,
+    onUpgradeSpell: (String) -> Unit = {},
+    onLearnSpell: (String) -> Unit = {},
     onEquip: (Item) -> Unit,
     onUnequip: (EquipSlot) -> Unit,
     meetsRequirements: (Hero, Item) -> Boolean,
@@ -44,6 +53,22 @@ fun HeroDetailScreen(
     onDebugAddProficiency: (() -> Unit)? = null  // [DEBUG] 发布前删除
 ) {
     var selectedSlot by remember { mutableStateOf<EquipSlot?>(null) }
+    var renameDialogOpen by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val pickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            // 取持久权限, 让 URI 在 App 重启后仍可读取
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) { /* 某些 URI 不支持持久权限, 忽略 */ }
+            onPortraitSelected(uri.toString())
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -55,7 +80,7 @@ fun HeroDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onEditName) {
+                    IconButton(onClick = { renameDialogOpen = true }) {
                         Icon(Icons.Default.Edit, contentDescription = "Edit Name")
                     }
                 }
@@ -72,10 +97,46 @@ fun HeroDetailScreen(
             // ── 头像 + 基础信息 ──
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Class / 职业: ${hero.heroClass.name}")
-                        TextButton(onClick = onChangeClass) { Text("Change / 更换") }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 头像 (点击换图; 长按清空回默认)
+                        HeroAvatar(
+                            hero = hero,
+                            size = 72.dp,
+                            modifier = Modifier.clickable {
+                                pickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(hero.name, style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f))
+                                IconButton(
+                                    onClick = { renameDialogOpen = true },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Rename",
+                                        modifier = Modifier.size(18.dp))
+                                }
+                            }
+                            Text(
+                                hero.heroClass.name,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (hero.portraitUri != null) {
+                                TextButton(
+                                    onClick = { onPortraitSelected(null) },
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                                ) {
+                                    Text("移除头像", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
                     }
+                    Spacer(Modifier.height(8.dp))
                     Text("Lv.${hero.level}  CP:${hero.combatPower}")
                     // EXP 进度条
                     val expProgress = if (hero.expToNextLevel > 0) hero.exp.toFloat() / hero.expToNextLevel else 0f
@@ -240,8 +301,9 @@ fun HeroDetailScreen(
                 }
             }
 
-            // ── 魔法 & 奇迹 ──
-            if (hero.spells.isNotEmpty()) {
+            // ── 魔法 & 奇迹 (含技能树: 升级 / 学习新法术) ──
+            val canCastClass = hero.heroClass == HeroClass.MAGE || hero.heroClass == HeroClass.CLERIC
+            if (hero.spells.isNotEmpty() || canCastClass) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         val magicSpells = hero.spells.filter {
@@ -250,22 +312,53 @@ fun HeroDetailScreen(
                         val miracleSpells = hero.spells.filter {
                             SpellRegistry.get(it.templateId).type == SpellType.MIRACLE
                         }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Skill Tree / 技能树", style = MaterialTheme.typography.titleSmall)
+                            Text("SP: ${hero.unspentSkillPoints}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
 
                         if (magicSpells.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
                             Text("Magic / 魔法 (INT)", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             magicSpells.forEach { spell ->
-                                SpellRow(spell, hero.level)
+                                SpellRow(spell, hero.level, hero.unspentSkillPoints) {
+                                    onUpgradeSpell(spell.templateId)
+                                }
                             }
                         }
-                        if (magicSpells.isNotEmpty() && miracleSpells.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
-                        }
                         if (miracleSpells.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
                             Text("Miracles / 奇迹 (FTH)", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             miracleSpells.forEach { spell ->
-                                SpellRow(spell, hero.level)
+                                SpellRow(spell, hero.level, hero.unspentSkillPoints) {
+                                    onUpgradeSpell(spell.templateId)
+                                }
+                            }
+                        }
+
+                        // ── 学习新法术 (仅法师/牧师) ──
+                        if (canCastClass) {
+                            val ownedIds = hero.spells.map { it.templateId }.toSet()
+                            val type = if (hero.heroClass == HeroClass.MAGE) SpellType.MAGIC else SpellType.MIRACLE
+                            val learnable = SpellRegistry.byType(type).filter { it.id !in ownedIds }
+                            if (learnable.isNotEmpty()) {
+                                Spacer(Modifier.height(12.dp))
+                                Text("可学习 / Learnable", style = MaterialTheme.typography.titleSmall)
+                                Spacer(Modifier.height(4.dp))
+                                learnable.forEach { tmpl ->
+                                    LearnableSpellRow(
+                                        template = tmpl,
+                                        canLearn = hero.unspentSkillPoints >= 1,
+                                        onLearn = { onLearnSpell(tmpl.id) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -297,6 +390,36 @@ fun HeroDetailScreen(
                 }
             }
         }
+    }
+
+    // ── 重命名对话框 ──
+    if (renameDialogOpen) {
+        var input by remember { mutableStateOf(hero.name) }
+        AlertDialog(
+            onDismissRequest = { renameDialogOpen = false },
+            title = { Text("重命名英雄") },
+            text = {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it.take(20) },
+                    label = { Text("名字 (最多 20 字)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRename(input)
+                        renameDialogOpen = false
+                    },
+                    enabled = input.isNotBlank() && input.trim() != hero.name
+                ) { Text("确认") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameDialogOpen = false }) { Text("取消") }
+            }
+        )
     }
 
     // ── 装备选择弹窗 ──
@@ -462,7 +585,42 @@ private fun ProficiencyRow(type: WeaponType, xp: Int, level: Int) {
 }
 
 @Composable
-private fun SpellRow(spell: HeroSpell, heroLevel: Int) {
+private fun LearnableSpellRow(
+    template: SpellTemplate,
+    canLearn: Boolean,
+    onLearn: () -> Unit
+) {
+    val firstTier = template.tiers[0]
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(firstTier.name, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "${template.target.name}  威力 ${firstTier.power}  MP ${firstTier.mpCost}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Button(
+            onClick = onLearn,
+            enabled = canLearn,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            modifier = Modifier.height(28.dp)
+        ) {
+            Text("学习 (1 SP)", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun SpellRow(
+    spell: HeroSpell,
+    heroLevel: Int,
+    unspentSkillPoints: Int,
+    onUpgrade: () -> Unit
+) {
     val template = SpellRegistry.get(spell.templateId)
     val tier = template.tiers[spell.currentTier - 1]
 
@@ -509,18 +667,30 @@ private fun SpellRow(spell: HeroSpell, heroLevel: Int) {
         )
         Text(tier.description, style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        // 下一阶级提示
+        // 下一阶级提示 + 升级按钮
         if (spell.currentTier < 4) {
             val nextTier = spell.currentTier + 1
             val reqLv = HeroSpell.requiredLevel(nextTier)
             val nextName = template.tiers[nextTier - 1].name
-            val canUpgrade = heroLevel >= reqLv
-            Text(
-                "Next / 下一阶: $nextName (Lv.$reqLv${if (canUpgrade) " OK" else ""})",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (canUpgrade) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outline
-            )
+            val levelOk = heroLevel >= reqLv
+            val canUpgrade = levelOk && unspentSkillPoints >= 1
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Next: $nextName (需 Lv.$reqLv${if (!levelOk) " — 等级不足" else ""})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (levelOk) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = onUpgrade,
+                    enabled = canUpgrade,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Text("升级 (1 SP)", style = MaterialTheme.typography.labelSmall)
+                }
+            }
         } else {
             Text("MAX / 已满阶", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)

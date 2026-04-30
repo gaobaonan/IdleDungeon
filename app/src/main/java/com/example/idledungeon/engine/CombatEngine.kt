@@ -32,7 +32,9 @@ object CombatEngine {
         val droppedItems: List<String>,
         val remainingCarriedItems: List<String>,
         /** 本场战斗中曾倒下 (HP=0) 的英雄 ID */
-        val downedHeroIds: Set<String> = emptySet()
+        val downedHeroIds: Set<String> = emptySet(),
+        /** 本场战斗中击败的怪物模板 ID 列表 (供图鉴累计击杀次数) */
+        val killedMonsterIds: List<String> = emptyList()
     )
 
     /**
@@ -48,10 +50,18 @@ object CombatEngine {
         val monsters = monsterIds.map { MonsterRegistry.spawn(it) }.toMutableList()
         val heroStates = heroes.map { it.copy() }.toMutableList()
         val bag = carriedItems.toMutableList()
+        /** 英雄眩晕剩余回合数 (heroId → 剩余 N 回合; 每个怪物 STUN 命中加 1, 每个回合开始 -1) */
+        val stunnedTurns = mutableMapOf<String, Int>()
 
         log.add("=== Battle Start / 战斗开始 ===")
-        log.add("  Party / 队伍: ${heroStates.joinToString { "${it.name}(HP:${it.currentHp} MP:${it.currentMp} CP:${it.combatPower})" }}")
-        log.add("  Enemies / 敌方: ${monsters.joinToString { "${it.name}(HP:${it.currentHp} CP:${it.combatPower})" }}")
+        log.add("  Party / 队伍:")
+        heroStates.forEach { h ->
+            log.add("    ${h.name}  HP:${h.currentHp}/${h.maxHp}  MP:${h.currentMp}/${h.maxMp}  CP:${h.combatPower}")
+        }
+        log.add("  Enemies / 敌方:")
+        monsters.forEach { m ->
+            log.add("    ${m.name}  HP:${m.currentHp}/${m.maxHp}  CP:${m.combatPower}")
+        }
 
         var round = 0
         while (heroStates.any { it.isAlive } && monsters.any { it.isAlive }) {
@@ -86,6 +96,14 @@ object CombatEngine {
                 val hero = heroStates[i]
                 if (!hero.isAlive) continue
                 if (monsters.none { it.isAlive }) break
+
+                // 眩晕检定: 还在眩晕中则跳过本回合, 计数 -1
+                val stunLeft = stunnedTurns[hero.id] ?: 0
+                if (stunLeft > 0) {
+                    log.add("  ${hero.name}: 被眩晕, 跳过本回合 (剩余 ${stunLeft - 1} 回合)")
+                    stunnedTurns[hero.id] = stunLeft - 1
+                    continue
+                }
 
                 // 优先级 1: 生命药水
                 if (hero.currentHp.toFloat() / hero.maxHp < POTION_THRESHOLD) {
@@ -152,6 +170,13 @@ object CombatEngine {
                 val damaged = target.copy(currentHp = (target.currentHp - damage).coerceAtLeast(0))
                 heroStates[idx] = gainProficiency(damaged, EquipSlot.ARMOR, log)
                 log.add("  $actionDesc: $damage dmg (HP:${heroStates[idx].currentHp}/${target.maxHp})")
+
+                // STUN 技能: 命中后受击者下回合跳过 (再被 STUN 累加)
+                if (skill != null && skill.effectType == SkillEffect.STUN) {
+                    val cur = stunnedTurns[target.id] ?: 0
+                    stunnedTurns[target.id] = cur + 1
+                    log.add("    ${target.name} 被 ${skill.name} 眩晕！下回合跳过")
+                }
             }
         }
 
@@ -172,11 +197,19 @@ object CombatEngine {
                 // 连续升级检查
                 while (h.exp >= h.expToNextLevel) {
                     val newLevel = h.level + 1
+                    // 战士/游侠: +5 属性点, 不会用法术故无技能点
+                    // 法师/牧师: +3 属性点 + 1 技能点 (技能点只能用于法术升阶)
+                    val statGain: Int
+                    val skillGain: Int
+                    when (h.heroClass) {
+                        HeroClass.WARRIOR, HeroClass.RANGER -> { statGain = 5; skillGain = 0 }
+                        HeroClass.MAGE, HeroClass.CLERIC -> { statGain = 3; skillGain = 1 }
+                    }
                     h = h.copy(
                         level = newLevel,
                         exp = h.exp - h.expToNextLevel,
-                        unspentStatPoints = h.unspentStatPoints + 5,
-                        unspentSkillPoints = h.unspentSkillPoints + 1
+                        unspentStatPoints = h.unspentStatPoints + statGain,
+                        unspentSkillPoints = h.unspentSkillPoints + skillGain
                     )
                     log.add("  ★ ${h.name} Level Up! → Lv.$newLevel ★")
                     // 升级有 10% 概率获得新正面特质
@@ -202,8 +235,9 @@ object CombatEngine {
             log.add("  Loot / 战利品: ${drops.joinToString()}")
         }
 
-        // 记录本场倒下的英雄 (HP <= 0)
+        // 记录本场倒下的英雄 (HP <= 0) 与击败的怪物
         val downedIds = heroStates.filter { it.currentHp <= 0 }.map { it.id }.toSet()
+        val killedMonsters = monsters.filter { it.currentHp <= 0 }.map { it.id }
 
         return CombatResult(
             victory = victory,
@@ -211,7 +245,8 @@ object CombatEngine {
             log = log,
             droppedItems = drops,
             remainingCarriedItems = bag,
-            downedHeroIds = downedIds
+            downedHeroIds = downedIds,
+            killedMonsterIds = killedMonsters
         )
     }
 
@@ -298,28 +333,25 @@ object CombatEngine {
     // 消耗品
     // ============================
 
+    /** 战斗中应急: 选恢复量最大的可用生命药水, 喝下 */
     private fun tryUseHealthPotion(hero: Hero, bag: MutableList<String>, log: MutableList<String>): Hero? {
-        // 优先用高级
-        val potionId = if ("great_health_potion" in bag) "great_health_potion"
-                       else if ("health_potion" in bag) "health_potion"
-                       else return null
-        bag.remove(potionId)
-        val healAmount = if (potionId == "great_health_potion") 150 else 50
-        val newHp = (hero.currentHp + healAmount).coerceAtMost(hero.maxHp)
-        val item = ItemRegistry.get(potionId)
-        log.add("  ${hero.name} uses ${item.name} → HP ${hero.currentHp}→$newHp")
+        val potion = bag.distinct().mapNotNull {
+            try { ItemRegistry.get(it).takeIf { i -> i.restoreHp > 0 } } catch (_: Exception) { null }
+        }.maxByOrNull { it.restoreHp } ?: return null
+        bag.remove(potion.id)
+        val newHp = (hero.currentHp + potion.restoreHp).coerceAtMost(hero.maxHp)
+        log.add("  ${hero.name} uses ${potion.name} → HP ${hero.currentHp}→$newHp")
         return hero.copy(currentHp = newHp)
     }
 
+    /** 战斗中应急: 选恢复量最大的可用魔法药水, 喝下 */
     private fun tryUseManaPotion(hero: Hero, bag: MutableList<String>, log: MutableList<String>): Hero? {
-        val potionId = if ("great_mana_potion" in bag) "great_mana_potion"
-                       else if ("mana_potion" in bag) "mana_potion"
-                       else return null
-        bag.remove(potionId)
-        val restoreAmount = if (potionId == "great_mana_potion") 100 else 30
-        val newMp = (hero.currentMp + restoreAmount).coerceAtMost(hero.maxMp)
-        val item = ItemRegistry.get(potionId)
-        log.add("  ${hero.name} uses ${item.name} → MP ${hero.currentMp}→$newMp")
+        val potion = bag.distinct().mapNotNull {
+            try { ItemRegistry.get(it).takeIf { i -> i.restoreMp > 0 } } catch (_: Exception) { null }
+        }.maxByOrNull { it.restoreMp } ?: return null
+        bag.remove(potion.id)
+        val newMp = (hero.currentMp + potion.restoreMp).coerceAtMost(hero.maxMp)
+        log.add("  ${hero.name} uses ${potion.name} → MP ${hero.currentMp}→$newMp")
         return hero.copy(currentMp = newMp)
     }
 

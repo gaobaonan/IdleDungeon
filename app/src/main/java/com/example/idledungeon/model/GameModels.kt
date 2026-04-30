@@ -54,10 +54,10 @@ fun Rarity.displayName(): String = when (this) {
 }
 
 /** 英雄职业 (不限制装备，只提供熟练度加成) */
-enum class HeroClass { WARRIOR, MAGE, RANGER, CLERIC, NOVICE }
+enum class HeroClass { WARRIOR, MAGE, RANGER, CLERIC }
 
 /** 英雄当前状态 */
-enum class HeroStatus { IDLE, DEPLOYED, INJURED }
+enum class HeroStatus { IDLE, DEPLOYED }
 
 /** 队伍站位 (影响挨打概率) */
 enum class Position { FRONT, BACK }
@@ -99,12 +99,10 @@ enum class NodeEvent {
     STAIRS_DOWN     // 下楼
 }
 
-/** 怪物技能效果 */
+/** 怪物技能效果 — 只保留 HEAVY_STRIKE (高倍率伤害) 和 STUN (跳过受击者下回合) */
 enum class SkillEffect {
-    HEAVY_STRIKE, // 重击 (高倍率伤害)
-    HEAL,         // 治疗
-    POISON,       // 中毒 (持续扣血)
-    STUN          // 击晕 (跳过一回合)
+    HEAVY_STRIKE, // 重击, 用 powerMultiplier 直接放大伤害
+    STUN          // 击晕, 受击者跳过下一回合
 }
 
 /** 魔法/奇迹分类 */
@@ -190,7 +188,11 @@ data class Item(
     /** R.drawable.xxx 资源 ID; 0 表示用 empty 占位 */
     val iconRes: Int = 0,
     /** 装备特性 ID 列表，具体效果在战斗引擎里查表 (待设计) */
-    val traits: List<String> = emptyList()
+    val traits: List<String> = emptyList(),
+    /** 消耗品: 喝下回复 HP 量 (>0 即视为生命药水) */
+    val restoreHp: Int = 0,
+    /** 消耗品: 喝下回复 MP 量 (>0 即视为魔法药水) */
+    val restoreMp: Int = 0
 ) {
     init {
         require(equipLevel in 1..10) { "equipLevel 必须在 1..10 (id=$id, 实际=$equipLevel)" }
@@ -247,9 +249,9 @@ data class HeroSpell(
     val templateId: String,
     val currentTier: Int = 1  // 1-4
 ) {
-    /** 升到目标阶级所需的英雄等级: 1 + 3 * (tier - 1) */
     companion object {
-        fun requiredLevel(targetTier: Int): Int = 1 + 3 * (targetTier - 1)
+        /** 升到目标 tier 所需的英雄等级 — T2=4, T3=7, T4=10 */
+        fun requiredLevel(targetTier: Int): Int = 3 * targetTier - 2
     }
 }
 
@@ -413,28 +415,34 @@ data class Hero(
 
 /** 玩家公会状态 */
 data class PlayerGuild(
-    val guildRank: String = "F",
     val gold: Int = 500,
-    val currentSupplies: Int = 10000,    // 测试用大补给
-    val maxSupplies: Int = 10000,       // 公会等级决定上限
-    val maxCarryItems: Int = 10,        // 探险可携带道具上限
+    val maxCarryItems: Int = 10,         // 探险可携带道具上限
     val guildLevel: Int = 1,
     val tavernLevel: Int = 1,
     val blacksmithLevel: Int = 1,
     val itemShopLevel: Int = 1
-)
+) {
+    /** 出战默认补给 = 100 + 酒馆每升一级 +20 */
+    val defaultExpeditionSupply: Int get() = 100 + 20 * (tavernLevel - 1)
+}
 
-/** 公会主线任务 */
+enum class QuestType {
+    EXPLORE_ROOMS,    // 探索 N 个房间 (累计)
+    DEFEAT_BOSS,      // 击败 X 层 Boss
+    FIND_ITEM         // 获得指定物品
+}
+
+/** 公会主线任务 (顺序触发, 上一个完成后自动激活下一个) */
 data class Quest(
     val id: String,
     val title: String,
     val description: String,
-    val requiredFloor: Int = 0,         // 需要到达的楼层
-    val requiredMonsterId: String? = null, // 需要击杀的怪物
-    val requiredKillCount: Int = 0,
-    val goldReward: Int = 0,
-    val rankUpOnComplete: Boolean = false, // 完成后是否升公会等级
+    val type: QuestType,
+    val targetCount: Int = 0,           // EXPLORE_ROOMS
+    val targetFloor: Int = 0,           // DEFEAT_BOSS
+    val targetItemId: String? = null,   // FIND_ITEM
     val isCompleted: Boolean = false
+    // 完成奖励仅是公会升级, 不再有金币奖励
 )
 
 // ==========================================
@@ -487,6 +495,7 @@ data class ExpeditionSession(
     val tactic: TacticType = TacticType.BALANCED,
     val secondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
     val currentSupply: Int,
+    val maxSupply: Int = currentSupply,            // 本次探险起始补给, 用于 UI 显示比例
     val carriedItems: List<String> = emptyList(), // 携带的消耗品ID
     val backpack: List<String> = emptyList(),     // 探索中拾取的战利品ID
     val isExploring: Boolean = false,
@@ -539,12 +548,8 @@ data class Monster(
 // 7. 图鉴与存档
 // ==========================================
 
-/** 怪物图鉴条目 */
-data class MonsterCodexEntry(
-    val monsterId: String,
-    val unlocked: Boolean = false,
-    val killCount: Int = 0
-)
+/** 主线 Q3 剑 ID — `GameViewModel.MAIN_QUESTS` 与 `DungeonGenerator.randomGuardedLootCell` 共用 */
+const val QUEST_EPIC_SWORD_ID = "mossy_blade_sword"
 
 /** 游戏存档顶层状态 (用于序列化 / Room 持久化) */
 data class GameState(
@@ -553,5 +558,18 @@ data class GameState(
     val playerAvatarUri: String? = null,
     val guild: PlayerGuild = PlayerGuild(),
     val deepestFloorReached: Int = 1,
-    val dayCount: Int = 1               // 游戏内天数 (控制商店刷新)
+    // ── 主线任务进度 ──
+    val mainQuestIndex: Int = 0,        // 当前进行中的任务下标; ≥ quests.size 表示全部完成
+    val roomsExplored: Int = 0,         // 累计探索房间数
+    val bossesDefeated: Set<Int> = emptySet(),    // 已击败 boss 的层号
+    val foundItemIds: Set<String> = emptySet(),   // 历史拿到过的物品 ID
+    val hasUnreadQuestUpdate: Boolean = true,     // 任务更新待玩家查看 (城镇公会图标红点)
+    // ── 怪物图鉴 ──
+    val monsterKills: Map<String, Int> = emptyMap(),  // monsterId → 累计击败次数
+    // ── 商店每日刷新 ──
+    /** 上次刷新的"日期键" = YYYY * 10000 + MM * 100 + DD; 进入新一天则触发刷新 */
+    val lastShopRefreshDayKey: Int = 0,
+    // ── 主线 Q3 保底 ──
+    /** F2 累计开过的守卫宝箱中没掉到苔纹剑的次数; 达到 5 时下个 F2 守卫宝箱必出 */
+    val f2ChestPity: Int = 0
 )

@@ -1,32 +1,115 @@
 package com.example.idledungeon.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.idledungeon.data.ItemRegistry
-import com.example.idledungeon.data.MonsterRegistry
+import com.example.idledungeon.data.SaveRepository
 import com.example.idledungeon.data.SpellRegistry
 import com.example.idledungeon.data.TraitRegistry
+import com.example.idledungeon.data.database.GameDatabase
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
  * 全局游戏状态 ViewModel
  * 管理所有游戏数据，驱动所有 UI 屏幕
+ *
+ * 持久化:
+ *   - init 块异步从 Room 读出存档, 没有就保留默认 (空白) 状态
+ *   - uiState 任何变化触发一次去抖动 (500ms) 后写库, 避免每次 setStat 都 IO
+ *   - 新游戏 / 测试模式启动前先清库, 防止旧数据混入
  */
-class GameViewModel : ViewModel() {
+@OptIn(FlowPreview::class)
+class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
     private val explorationEngine = ExplorationEngine()
     private var pendingNewGame = false
+
+    private val saveRepo = SaveRepository(GameDatabase.getInstance(application))
+
+    /** 是否已完成首次加载 (启动时跳过自动保存, 防止用空 state 覆盖磁盘上的有效存档) */
+    @Volatile private var loaded = false
+
+    init {
+        viewModelScope.launch {
+            val loadedState = saveRepo.load()
+            // 守护: 用户可能在 load 完成前已点击"新游戏", 已经把 _uiState 改写成新存档.
+            // 这种情况下不要再用磁盘上的旧数据覆盖.
+            if (loadedState != null && !_uiState.value.gameState.hasStarted) {
+                _uiState.value = loadedState
+                refreshShops()  // 启动后按当天日期重建商店列表
+            }
+            loaded = true
+        }
+        // 自动保存: state 变化 → 去抖动 500ms → 写库
+        viewModelScope.launch {
+            _uiState
+                .drop(1)         // 跳过初始空 state
+                .debounce(500L)
+                .collect { state ->
+                    if (loaded && state.gameState.hasStarted) {
+                        saveRepo.save(state)
+                    }
+                }
+        }
+    }
+
+    companion object {
+        // QUEST_EPIC_SWORD_ID 已挪到 model.GameModels.kt 顶层 (供 DungeonGenerator 共用)
+
+        /** 5 个主线任务, 顺序触发. 完成一个自动激活下一个 */
+        val MAIN_QUESTS: List<Quest> = listOf(
+            Quest(
+                id = "q1_explore15",
+                title = "初涉地下城",
+                description = "探索 15 个房间",
+                type = QuestType.EXPLORE_ROOMS,
+                targetCount = 15
+            ),
+            Quest(
+                id = "q2_boss1",
+                title = "鼠王讨伐",
+                description = "击败第一层 Boss",
+                type = QuestType.DEFEAT_BOSS,
+                targetFloor = 1
+            ),
+            Quest(
+                id = "q3_find_sword",
+                title = "苔纹剑的传说",
+                description = "在第二层的某个守卫宝箱中找到 苔纹剑 (史诗)",
+                type = QuestType.FIND_ITEM,
+                targetItemId = QUEST_EPIC_SWORD_ID
+            ),
+            Quest(
+                id = "q4_boss2",
+                title = "酋长讨伐",
+                description = "击败第二层 Boss",
+                type = QuestType.DEFEAT_BOSS,
+                targetFloor = 2
+            ),
+            Quest(
+                id = "q5_boss3",
+                title = "深渊远征",
+                description = "击败第三层 Boss",
+                type = QuestType.DEFEAT_BOSS,
+                targetFloor = 3
+            )
+        )
+    }
 
     // ============================
     // 游戏存档
@@ -43,14 +126,25 @@ class GameViewModel : ViewModel() {
     }
 
     fun startNewGame() {
+        // 不需要显式 clear DB: 后续自动保存会经 heroDao.replaceAll + snapshot upsert REPLACE
+        // 完整覆盖, 避免与 debounced save 形成 clear→save→clear 的竞态.
         _uiState.update {
             GameUiState(
                 gameState = GameState(hasStarted = true, playerName = "Guild Master"),
                 heroes = emptyList(),
-                inventory = emptyList()
+                inventory = emptyList(),
+                quests = MAIN_QUESTS
             )
         }
         refreshShops()
+    }
+
+    /** 玩家点开公会界面后调用, 清掉红感叹号 */
+    fun markQuestUpdateRead() {
+        _uiState.update { state ->
+            if (!state.gameState.hasUnreadQuestUpdate) return@update state
+            state.copy(gameState = state.gameState.copy(hasUnreadQuestUpdate = false))
+        }
     }
 
     /**
@@ -69,32 +163,36 @@ class GameViewModel : ViewModel() {
         val testHeroes = listOf(warrior, mage, cleric, ranger)
 
         val potionStock = buildList {
-            repeat(10) { add(ItemRegistry.get("health_potion")) }
-            repeat(10) { add(ItemRegistry.get("mana_potion")) }
-            repeat(5)  { add(ItemRegistry.get("great_health_potion")) }
-            repeat(5)  { add(ItemRegistry.get("great_mana_potion")) }
-            repeat(3)  { add(ItemRegistry.get("antidote")) }
-            repeat(5)  { add(ItemRegistry.get("ration")) }
+            // 五档血瓶 + 五档蓝瓶, 各塞几瓶方便测试不同档次的取舍
+            repeat(8) { add(ItemRegistry.get("health_potion")) }
+            repeat(5) { add(ItemRegistry.get("mid_health_potion")) }
+            repeat(3) { add(ItemRegistry.get("great_health_potion")) }
+            repeat(2) { add(ItemRegistry.get("super_health_potion")) }
+            repeat(1) { add(ItemRegistry.get("elixir_of_vitality")) }
+            repeat(8) { add(ItemRegistry.get("mana_potion")) }
+            repeat(5) { add(ItemRegistry.get("mid_mana_potion")) }
+            repeat(3) { add(ItemRegistry.get("great_mana_potion")) }
+            repeat(2) { add(ItemRegistry.get("super_mana_potion")) }
+            repeat(1) { add(ItemRegistry.get("elixir_of_arcana")) }
             // 一些素材方便测试出售
-            repeat(8)  { add(ItemRegistry.get("iron_ore")) }
-            repeat(5)  { add(ItemRegistry.get("monster_bone")) }
-            repeat(3)  { add(ItemRegistry.get("magic_crystal")) }
+            repeat(8) { add(ItemRegistry.get("iron_ore")) }
+            repeat(5) { add(ItemRegistry.get("monster_bone")) }
+            repeat(3) { add(ItemRegistry.get("magic_crystal")) }
         }
 
         val carried = listOf(
             "health_potion", "health_potion", "health_potion",
-            "great_health_potion", "great_health_potion",
+            "mid_health_potion", "mid_health_potion",
+            "great_health_potion",
             "mana_potion", "mana_potion",
-            "great_mana_potion", "great_mana_potion",
-            "antidote"
+            "mid_mana_potion", "mid_mana_potion"
         )
 
         val testGuild = PlayerGuild(
             gold = 100_000,
-            guildLevel = 5, tavernLevel = 5,
-            blacksmithLevel = 8, itemShopLevel = 8,
-            maxSupplies = 10_500, currentSupplies = 10_500,
-            maxCarryItems = 30
+            // 所有建筑都 1 级, 方便测试升级流程 + 每日刷新
+            guildLevel = 1, tavernLevel = 1, blacksmithLevel = 1, itemShopLevel = 1,
+            maxCarryItems = 10
         )
 
         _uiState.update {
@@ -107,6 +205,7 @@ class GameViewModel : ViewModel() {
                 ),
                 heroes = testHeroes,
                 inventory = potionStock,
+                quests = MAIN_QUESTS,
                 partySlots = listOf(
                     PartySlot(warrior.id, Position.FRONT),
                     PartySlot(ranger.id, Position.FRONT),
@@ -129,7 +228,6 @@ class GameViewModel : ViewModel() {
             HeroClass.MAGE    -> mapOf(StatType.STR to 4,  StatType.DEX to 5, StatType.INT to 12, StatType.FTH to 4)
             HeroClass.CLERIC  -> mapOf(StatType.STR to 5,  StatType.DEX to 4, StatType.INT to 5,  StatType.FTH to 12)
             HeroClass.RANGER  -> mapOf(StatType.STR to 4,  StatType.DEX to 12, StatType.INT to 4, StatType.FTH to 5)
-            HeroClass.NOVICE  -> mapOf(StatType.STR to 7,  StatType.DEX to 7, StatType.INT to 7,  StatType.FTH to 7)
         }
         // 全部用职业可穿的最低级装备 + L1 通用皮甲 + 铁戒指
         val equipment: Map<EquipSlot, Item> = when (cls) {
@@ -154,11 +252,10 @@ class GameViewModel : ViewModel() {
                 EquipSlot.ARMOR     to ItemRegistry.get("leather_armor"),
                 EquipSlot.ACCESSORY to ItemRegistry.get("iron_ring")
             )
-            HeroClass.NOVICE -> emptyMap()
         }
         val maxHp = 50 + level * 10  // L1 = 60
         val maxMp = 20 + level * 3   // L1 = 23
-        val spells = SpellRegistry.computeSpells(baseStats, level)
+        val spells = SpellRegistry.computeSpells(baseStats, level, cls)
         val initial = Hero(
             id = id, name = name, portraitUri = null,
             heroClass = cls, level = level,
@@ -176,7 +273,6 @@ class GameViewModel : ViewModel() {
             HeroClass.MAGE    -> listOf("trait_lethal_strike", "trait_wise")      // 10% 暴击 3x / INT+5
             HeroClass.CLERIC  -> listOf("trait_regen", "trait_vampiric")          // 每回合 +10HP / 15% 吸血
             HeroClass.RANGER  -> listOf("trait_shadow_step", "trait_wind_blade")  // 20% 闪避 / 15% 二连击
-            HeroClass.NOVICE  -> emptyList()
         }
         return testTraits.fold(initial) { h, tid -> TraitRegistry.applyTrait(h, tid) }
     }
@@ -195,15 +291,19 @@ class GameViewModel : ViewModel() {
             if (guild.gold < cost) return@update state
 
             val newGuild = when (building) {
-                "guild" -> guild.copy(
-                    guildLevel = guild.guildLevel + 1,
-                    maxSupplies = guild.maxSupplies + 50,
-                    maxCarryItems = guild.maxCarryItems + 5,
-                    gold = guild.gold - cost
-                )
-                "tavern" -> guild.copy(tavernLevel = guild.tavernLevel + 1, gold = guild.gold - cost)
+                // 公会不再可手动投资, 只能通过完成主线任务自动升级
+                "guild" -> return@update state
+                // 酒馆 10 级封顶
+                "tavern" -> {
+                    if (guild.tavernLevel >= 10) return@update state
+                    guild.copy(tavernLevel = guild.tavernLevel + 1, gold = guild.gold - cost)
+                }
                 "blacksmith" -> guild.copy(blacksmithLevel = guild.blacksmithLevel + 1, gold = guild.gold - cost)
-                "item_shop" -> guild.copy(itemShopLevel = guild.itemShopLevel + 1, gold = guild.gold - cost)
+                // 道具店 5 级封顶 (对应 5 档血/蓝瓶)
+                "item_shop" -> {
+                    if (guild.itemShopLevel >= 5) return@update state
+                    guild.copy(itemShopLevel = guild.itemShopLevel + 1, gold = guild.gold - cost)
+                }
                 else -> guild
             }
             state.copy(gameState = state.gameState.copy(guild = newGuild))
@@ -226,16 +326,44 @@ class GameViewModel : ViewModel() {
     // 商店刷新
     // ============================
 
-    /** [DEBUG] 手动刷新商店 */
-    fun debugRefreshShops() = refreshShops()
+    /**
+     * [DEBUG] 把"上次刷新日期"减去 1 天, 触发下一次 checkDailyRefresh 立即重刷.
+     * 不挂 UI 按钮 — 测试时可以从测试模式入口或 Logcat 间接触发, 也可以直接改系统时间.
+     */
+    fun debugSimulatePastDay() {
+        _uiState.update { state ->
+            state.copy(gameState = state.gameState.copy(lastShopRefreshDayKey = 0))
+        }
+    }
 
+    /**
+     * 检查是否进入新的一天 (现实时间). 是的话把铁匠铺/道具店/酒馆全部刷新.
+     * 应在 App 进入前台 (ON_START) 时调用一次.
+     */
+    fun checkDailyRefresh() {
+        val today = currentDayKey()
+        if (today > _uiState.value.gameState.lastShopRefreshDayKey) {
+            refreshShops()
+        }
+    }
+
+    /** YYYYMMDD 格式日期键, 不依赖 java.time, 兼容老 Android 版本 */
+    private fun currentDayKey(): Int {
+        val cal = java.util.Calendar.getInstance()
+        return cal.get(java.util.Calendar.YEAR) * 10000 +
+            (cal.get(java.util.Calendar.MONTH) + 1) * 100 +
+            cal.get(java.util.Calendar.DAY_OF_MONTH)
+    }
+
+    /** 刷新酒馆招募 + 铁匠铺武器/护甲 + 道具店消耗品, 同时写入今日的 dayKey */
     private fun refreshShops() {
         _uiState.update { state ->
             val guild = state.gameState.guild
             state.copy(
                 recruitableHeroes = generateRecruitableHeroes(guild.tavernLevel),
                 shopEquipments = generateShopItems(guild.blacksmithLevel, ItemType.EQUIPMENT),
-                shopConsumables = generateShopItems(guild.itemShopLevel, ItemType.CONSUMABLE)
+                shopConsumables = generateShopItems(guild.itemShopLevel, ItemType.CONSUMABLE),
+                gameState = state.gameState.copy(lastShopRefreshDayKey = currentDayKey())
             )
         }
     }
@@ -277,15 +405,9 @@ class GameViewModel : ViewModel() {
                     StatType.INT to secondary(),
                     StatType.FTH to primary()
                 )
-                HeroClass.NOVICE -> mapOf(
-                    StatType.STR to (5..8 + level).random(),
-                    StatType.DEX to (5..8 + level).random(),
-                    StatType.INT to (5..8 + level).random(),
-                    StatType.FTH to (5..8 + level).random()
-                )
             }
 
-            val spells = SpellRegistry.computeSpells(stats, level)
+            val spells = SpellRegistry.computeSpells(stats, level, heroClass)
             val initial = Hero(
                 id = "recruit_$i",
                 name = "Adventurer ${i + 1} / 冒险者${i + 1}",
@@ -314,6 +436,25 @@ class GameViewModel : ViewModel() {
     // ============================
     // 英雄管理
     // ============================
+
+    /** 重命名英雄. 空白名字忽略, 自动 trim */
+    fun renameHero(heroId: String, newName: String) {
+        if (newName.isBlank()) return
+        _uiState.update { state ->
+            state.copy(heroes = state.heroes.map {
+                if (it.id == heroId) it.copy(name = newName.trim()) else it
+            })
+        }
+    }
+
+    /** 设置英雄头像 (传 null 清空回到默认图标) */
+    fun setHeroPortrait(heroId: String, uri: String?) {
+        _uiState.update { state ->
+            state.copy(heroes = state.heroes.map {
+                if (it.id == heroId) it.copy(portraitUri = uri) else it
+            })
+        }
+    }
 
     fun recruitHero(heroId: String) {
         _uiState.update { state ->
@@ -444,6 +585,57 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    // ============================
+    // 技能树
+    // ============================
+
+    /**
+     * 升级已有法术阶级.
+     * 升到目标 tier 需要英雄等级 ≥ 3*tier - 2 (T2=4, T3=7, T4=10).
+     * 消耗 1 技能点.
+     */
+    fun upgradeSpellTier(heroId: String, templateId: String) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            if (hero.unspentSkillPoints < 1) return@update state
+            val spell = hero.spells.find { it.templateId == templateId } ?: return@update state
+            if (spell.currentTier >= 4) return@update state
+            val nextTier = spell.currentTier + 1
+            if (hero.level < HeroSpell.requiredLevel(nextTier)) return@update state
+            val newSpells = hero.spells.map {
+                if (it.templateId == templateId) it.copy(currentTier = nextTier) else it
+            }
+            val newHero = hero.copy(
+                spells = newSpells,
+                unspentSkillPoints = hero.unspentSkillPoints - 1
+            )
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
+    /**
+     * 学习新法术 (需要法师/牧师职业, 跟法术类型匹配, 1 技能点).
+     */
+    fun learnSpell(heroId: String, templateId: String) {
+        _uiState.update { state ->
+            val hero = state.heroes.find { it.id == heroId } ?: return@update state
+            if (hero.unspentSkillPoints < 1) return@update state
+            if (hero.spells.any { it.templateId == templateId }) return@update state
+            val template = SpellRegistry.get(templateId)
+            val classOk = when (hero.heroClass) {
+                HeroClass.MAGE -> template.type == SpellType.MAGIC
+                HeroClass.CLERIC -> template.type == SpellType.MIRACLE
+                else -> false
+            }
+            if (!classOk) return@update state
+            val newHero = hero.copy(
+                spells = hero.spells + HeroSpell(templateId = templateId, currentTier = 1),
+                unspentSkillPoints = hero.unspentSkillPoints - 1
+            )
+            state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
+        }
+    }
+
     /** 消耗 1 属性点，加 20 MP */
     fun allocateMpPoint(heroId: String) {
         _uiState.update { state ->
@@ -531,6 +723,37 @@ class GameViewModel : ViewModel() {
             val carriedCount = current.count { it == itemId }
             if (current.size >= max || carriedCount >= ownedCount) return@update state
             state.copy(carriedItemIds = current + itemId)
+        }
+    }
+
+    // ============================
+    // 出发前补给购买
+    // ============================
+
+    /** 单次操作的换算: 1 金币 = 5 补给 */
+    private val SUPPLY_PER_GOLD = 5
+
+    /** 花 1 金币加 5 补给到本次出战 */
+    fun buyExtraSupply() {
+        _uiState.update { state ->
+            val guild = state.gameState.guild
+            if (guild.gold < 1) return@update state
+            state.copy(
+                gameState = state.gameState.copy(guild = guild.copy(gold = guild.gold - 1)),
+                purchasedExtraSupply = state.purchasedExtraSupply + SUPPLY_PER_GOLD
+            )
+        }
+    }
+
+    /** 退还 5 补给, 退 1 金币 */
+    fun refundExtraSupply() {
+        _uiState.update { state ->
+            if (state.purchasedExtraSupply < SUPPLY_PER_GOLD) return@update state
+            val guild = state.gameState.guild
+            state.copy(
+                gameState = state.gameState.copy(guild = guild.copy(gold = guild.gold + 1)),
+                purchasedExtraSupply = state.purchasedExtraSupply - SUPPLY_PER_GOLD
+            )
         }
     }
 
@@ -712,23 +935,30 @@ class GameViewModel : ViewModel() {
             }
         }
 
+        // 实际出战补给 = 酒馆默认 + 战术界面买的
+        val totalSupply = state.gameState.guild.defaultExpeditionSupply + state.purchasedExtraSupply
+        // 复用上次冒险的楼层 (撤退保留进度); 若无则从 1 层开始
+        val savedLayer = state.currentFloor?.layer ?: 1
         val session = ExpeditionSession(
             dungeonId = "main_dungeon",
             party = state.partySlots,
             tactic = state.selectedTactic,
             secondaryTactic = state.selectedSecondaryTactic,
-            currentSupply = state.gameState.guild.currentSupplies,
+            currentLayer = savedLayer,
+            currentSupply = totalSupply,
+            maxSupply = totalSupply,
             carriedItems = actualCarried,
             isExploring = true
         )
 
         // 出征队员: 状态置 DEPLOYED, 同时满血满蓝 (上一轮撤退保留下来的伤害此刻才修复)
+        // currentFloor 不清空 — 让 ExplorationEngine 复用上次冒险的地图 (清空格子/visited 标记/位置 全部保留)
         val partyIds = state.partySlots.map { it.heroId }.toSet()
         _uiState.update {
             it.copy(
                 expedition = session,
-                currentFloor = null,
                 inventory = newInventory,
+                purchasedExtraSupply = 0,  // 用完即清, 下次出战重新攒
                 heroes = it.heroes.map { h ->
                     if (h.id in partyIds) h.copy(
                         status = HeroStatus.DEPLOYED,
@@ -739,9 +969,18 @@ class GameViewModel : ViewModel() {
             )
         }
 
-        // 启动协程驱动探索
+        // 启动协程驱动探索 — 包 try/catch 防止引擎崩了让 UI 卡死
         viewModelScope.launch {
-            explorationEngine.run(session, _uiState)
+            try {
+                explorationEngine.run(session, _uiState)
+            } catch (e: Exception) {
+                android.util.Log.e("Expedition", "ExplorationEngine 抛异常", e)
+                // 让 UI 跳出探险界面 — 把 expedition 标记为已结束
+                _uiState.update { state ->
+                    val ended = state.expedition?.copy(isExploring = false)
+                    state.copy(expedition = ended)
+                }
+            }
         }
     }
 }
@@ -764,9 +1003,6 @@ data class GameUiState(
     // 任务
     val quests: List<Quest> = emptyList(),
 
-    // 图鉴
-    val codexEntries: List<Pair<MonsterCodexEntry, Monster?>> = emptyList(),
-
     // 地下城
     val currentFloor: DungeonFloor? = null,
     val expedition: ExpeditionSession? = null,
@@ -775,5 +1011,7 @@ data class GameUiState(
     val partySlots: List<PartySlot> = emptyList(),
     val selectedTactic: TacticType = TacticType.BALANCED,
     val selectedSecondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
-    val carriedItemIds: List<String> = emptyList()
+    val carriedItemIds: List<String> = emptyList(),
+    /** 出发前在战术界面买的额外补给 (5 补给/1 金币的倍数). 出发后清零. */
+    val purchasedExtraSupply: Int = 0
 )

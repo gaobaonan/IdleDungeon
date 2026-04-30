@@ -147,6 +147,7 @@ object ItemRegistry {
         id: String, name: String, desc: String,
         level: Int = 1, rarity: Rarity = Rarity.COMMON,
         purchasable: Boolean = true, lootable: Boolean = false,
+        restoreHp: Int = 0, restoreMp: Int = 0,
         traits: List<String> = emptyList()
     ): Item = Item(
         id = id, name = name, description = desc,
@@ -154,6 +155,7 @@ object ItemRegistry {
         equipLevel = level,
         purchasable = purchasable, lootable = lootable,
         iconRes = R.drawable.empty,
+        restoreHp = restoreHp, restoreMp = restoreMp,
         traits = traits
     )
 
@@ -342,15 +344,20 @@ object ItemRegistry {
             accessoryAll("dragon_eye_amulet", "龙眼项链", 9, Rarity.EPIC, desc = "镶嵌龙眼石，全属性提升")
         ) +
 
-        // ── 消耗品 (CONSUMABLE) ──
+        // ── 消耗品 (CONSUMABLE) — 5 级血瓶 + 5 级蓝瓶, 等级 = 道具店上架等级 ──
         listOf(
-            consumable("health_potion", "生命药水", "回复50HP", level = 1),
-            consumable("mana_potion", "魔力药水", "回复30MP", level = 1),
-            consumable("ration", "干粮", "恢复10点补给", level = 1),
-            consumable("antidote", "解毒药", "解除中毒状态", level = 2),
-            consumable("smoke_bomb", "烟雾弹", "立刻脱离战斗", level = 3, rarity = Rarity.UNCOMMON),
-            consumable("great_health_potion", "高级生命药水", "回复150HP", level = 4, rarity = Rarity.UNCOMMON),
-            consumable("great_mana_potion", "高级魔力药水", "回复100MP", level = 4, rarity = Rarity.UNCOMMON)
+            // 生命药水: T1-T5
+            consumable("health_potion",       "生命药水",       "回复 50 HP",  level = 1, rarity = Rarity.COMMON,   restoreHp = 50),
+            consumable("mid_health_potion",   "中级生命药水",   "回复 110 HP", level = 2, rarity = Rarity.COMMON,   restoreHp = 110),
+            consumable("great_health_potion", "高级生命药水",   "回复 220 HP", level = 3, rarity = Rarity.UNCOMMON, restoreHp = 220),
+            consumable("super_health_potion", "极品生命药水",   "回复 380 HP", level = 4, rarity = Rarity.RARE,     restoreHp = 380),
+            consumable("elixir_of_vitality",  "活力之精",       "回复 600 HP", level = 5, rarity = Rarity.EPIC,     restoreHp = 600),
+            // 魔法药水: T1-T5
+            consumable("mana_potion",         "魔力药水",       "回复 30 MP",  level = 1, rarity = Rarity.COMMON,   restoreMp = 30),
+            consumable("mid_mana_potion",     "中级魔力药水",   "回复 70 MP",  level = 2, rarity = Rarity.COMMON,   restoreMp = 70),
+            consumable("great_mana_potion",   "高级魔力药水",   "回复 140 MP", level = 3, rarity = Rarity.UNCOMMON, restoreMp = 140),
+            consumable("super_mana_potion",   "极品魔力药水",   "回复 240 MP", level = 4, rarity = Rarity.RARE,     restoreMp = 240),
+            consumable("elixir_of_arcana",    "奥术之精",       "回复 400 MP", level = 5, rarity = Rarity.EPIC,     restoreMp = 400)
         ) +
 
         // ── 材料 (MATERIAL) — 仅地下城掉落，仓库出售 ──

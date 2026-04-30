@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.example.idledungeon.model.Hero
 import com.example.idledungeon.model.PartySlot
 import com.example.idledungeon.model.Position
+import com.example.idledungeon.ui.component.HeroAvatar
 
 /**
  * 队伍编成界面
@@ -101,7 +102,7 @@ fun PartySetupScreen(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Person, contentDescription = null)
+                            HeroAvatar(hero = hero, size = 40.dp)
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 "${hero.name}  Lv.${hero.level}  ATK:${hero.attack}",
@@ -131,15 +132,19 @@ fun PartySetupScreen(
 @Composable
 private fun PartySlotBox(hero: Hero?, onRemove: () -> Unit) {
     OutlinedCard(
-        modifier = Modifier.size(100.dp, 80.dp)
+        modifier = Modifier.size(100.dp, 90.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (hero != null) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(hero.name, style = MaterialTheme.typography.labelMedium)
-                    Text("Lv.${hero.level}", style = MaterialTheme.typography.labelSmall)
-                    IconButton(onClick = onRemove, modifier = Modifier.size(20.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(16.dp))
+                    HeroAvatar(hero = hero, size = 36.dp)
+                    Text(hero.name, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Lv.${hero.level}", style = MaterialTheme.typography.labelSmall)
+                        IconButton(onClick = onRemove, modifier = Modifier.size(20.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove",
+                                modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             } else {

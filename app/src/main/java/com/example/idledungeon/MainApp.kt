@@ -1,10 +1,13 @@
 package com.example.idledungeon
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
@@ -46,6 +49,16 @@ fun MainApp() {
     val vm: GameViewModel = viewModel()
     val state by vm.uiState.collectAsState()
 
+    // 每次 App 进入前台时检查一次"日期是否变化"; 若进入了新一天则刷新铁匠铺/道具店/酒馆
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) vm.checkDailyRefresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     NavHost(navController = navController, startDestination = Route.START) {
 
         // ── 开始菜单 ──
@@ -71,6 +84,7 @@ fun MainApp() {
             TownScreen(
                 playerName = state.gameState.playerName,
                 gold = state.gameState.guild.gold,
+                guildHasUnreadQuest = state.gameState.hasUnreadQuestUpdate,
                 onGuildClick = { navController.navigateSafe(Route.GUILD) },
                 onTavernClick = { navController.navigateSafe(Route.TAVERN) },
                 onBlacksmithClick = { navController.navigateSafe(Route.BLACKSMITH) },
@@ -85,12 +99,11 @@ fun MainApp() {
         // ── 城镇建筑 ──
         composable(Route.GUILD) {
             GuildScreen(
-                guildRank = state.gameState.guild.guildRank,
                 guildLevel = state.gameState.guild.guildLevel,
-                maxSupplies = state.gameState.guild.maxSupplies,
                 quests = state.quests,
-                investCost = vm.getInvestCost("guild"),
-                onInvest = { vm.invest("guild") },
+                currentQuestIndex = state.gameState.mainQuestIndex,
+                roomsExplored = state.gameState.roomsExplored,
+                onMarkRead = { vm.markQuestUpdateRead() },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -115,7 +128,6 @@ fun MainApp() {
                 investCost = vm.getInvestCost("blacksmith"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("blacksmith") },
-                onRefresh = { vm.debugRefreshShops() },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -128,7 +140,6 @@ fun MainApp() {
                 investCost = vm.getInvestCost("item_shop"),
                 onBuy = { vm.buyItem(it) },
                 onInvest = { vm.invest("item_shop") },
-                onRefresh = { vm.debugRefreshShops() },
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -153,9 +164,10 @@ fun MainApp() {
                 hero = hero,
                 inventory = if (isRecruited) state.inventory else emptyList(),
                 onBack = { navController.popBackStackSafe() },
-                onEditName = { /* TODO: 弹出对话框 */ },
-                onEditPortrait = { /* TODO: 调用图片选择器 */ },
-                onChangeClass = { /* TODO: 弹出职业选择 */ },
+                onRename = { newName -> if (isRecruited) vm.renameHero(heroId, newName) },
+                onPortraitSelected = { uri -> if (isRecruited) vm.setHeroPortrait(heroId, uri) },
+                onUpgradeSpell = { tid -> if (isRecruited) vm.upgradeSpellTier(heroId, tid) },
+                onLearnSpell = { tid -> if (isRecruited) vm.learnSpell(heroId, tid) },
                 onEquip = { item -> if (isRecruited) vm.equipItem(heroId, item) },
                 onUnequip = { slot -> if (isRecruited) vm.unequipItem(heroId, slot) },
                 meetsRequirements = { h, i -> vm.meetsRequirements(h, i) },
@@ -178,8 +190,7 @@ fun MainApp() {
 
         composable(Route.BESTIARY) {
             BestiaryScreen(
-                entries = state.codexEntries,
-                onMonsterClick = { /* TODO: 怪物详情 */ },
+                monsterKills = state.gameState.monsterKills,
                 onBack = { navController.popBackStackSafe() }
             )
         }
@@ -219,10 +230,15 @@ fun MainApp() {
                 consumables = state.inventory.filter { it.type == com.example.idledungeon.model.ItemType.CONSUMABLE },
                 carriedItemIds = state.carriedItemIds,
                 maxCarry = state.gameState.guild.maxCarryItems,
+                defaultSupply = state.gameState.guild.defaultExpeditionSupply,
+                purchasedSupply = state.purchasedExtraSupply,
+                gold = state.gameState.guild.gold,
                 onTacticChange = { vm.setTactic(it) },
                 onSecondaryTacticChange = { vm.setSecondaryTactic(it) },
                 onAddItem = { vm.addCarryItem(it) },
                 onRemoveItem = { vm.removeCarryItem(it) },
+                onBuySupply = { vm.buyExtraSupply() },
+                onRefundSupply = { vm.refundExtraSupply() },
                 onConfirm = {
                     vm.startExpedition()
                     navController.popBackStack(Route.DUNGEON, inclusive = false)

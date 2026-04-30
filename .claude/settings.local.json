@@ -3,7 +3,19 @@
     "allow": [
       "Bash(./gradlew :app:compileDebugKotlin)",
       "Bash(./gradlew compileDebugKotlin)",
-      "Bash(./gradlew assembleDebug)"
+      "Bash(./gradlew assembleDebug)",
+      "Bash(adb devices *)",
+      "Bash(\"/c/Users/gao/AppData/Local/Android/Sdk/platform-tools/adb.exe\" devices *)",
+      "Bash(\"/d/Android/Sdk/platform-tools/adb.exe\" devices *)",
+      "Read(//d/Android/Sdk//**)",
+      "Bash(\"/d/Android/Sdk/platform-tools/adb.exe\" kill-server *)",
+      "Bash(\"/d/Android/Sdk/platform-tools/adb.exe\" start-server *)",
+      "Bash(\"/d/Android/Sdk/platform-tools/adb.exe\" disconnect *)",
+      "Bash(netstat -ano)",
+      "Bash(tasklist.exe *)",
+      "Bash(taskkill.exe //F //PID 19012)",
+      "Bash(./gradlew lint *)",
+      "Bash(./gradlew assembleDebug --quiet)"
     ]
   }
 }

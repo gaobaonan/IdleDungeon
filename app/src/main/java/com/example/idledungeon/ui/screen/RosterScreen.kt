@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.idledungeon.model.Hero
 import com.example.idledungeon.model.HeroStatus
+import com.example.idledungeon.ui.component.HeroAvatar
 
 /**
  * 冒险者名录
@@ -61,8 +62,7 @@ private fun HeroListCard(hero: Hero, onClick: () -> Unit) {
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // TODO: 用 Coil 加载 hero.portraitUri
-            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(48.dp))
+            HeroAvatar(hero = hero, size = 48.dp)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(hero.name, style = MaterialTheme.typography.titleSmall)
@@ -78,7 +78,6 @@ private fun StatusChip(status: HeroStatus) {
     val (text, color) = when (status) {
         HeroStatus.IDLE -> "Idle / 待命" to MaterialTheme.colorScheme.primary
         HeroStatus.DEPLOYED -> "Deployed / 出征" to MaterialTheme.colorScheme.tertiary
-        HeroStatus.INJURED -> "Injured / 负伤" to MaterialTheme.colorScheme.error
     }
     Surface(
         color = color.copy(alpha = 0.15f),

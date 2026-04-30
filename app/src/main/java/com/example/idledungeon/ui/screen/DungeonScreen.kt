@@ -21,6 +21,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -37,7 +42,20 @@ fun DungeonScreen(
     onBack: () -> Unit,
     onDebugRefresh: (() -> Unit)? = null
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    // 订阅事件总线: 探险结束时弹 Snackbar 通知玩家
+    LaunchedEffect(Unit) {
+        com.example.idledungeon.notification.ExpeditionEventBus.events.collect { event ->
+            if (event is com.example.idledungeon.notification.ExpeditionEvent.Retreated) {
+                snackbarHostState.showSnackbar(
+                    message = "本次探险结束: ${event.reason} — 已归城",
+                    duration = SnackbarDuration.Short
+                )
+            }
+        }
+    }
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Dungeon / 地下城") },
@@ -78,7 +96,7 @@ fun DungeonScreen(
                             val status = if (expedition.isExploring) "Exploring" else "Idle"
                             Text(status, style = MaterialTheme.typography.labelMedium)
                             Text("F${expedition.currentLayer}", style = MaterialTheme.typography.labelMedium)
-                            Text("Supply:${expedition.currentSupply}", style = MaterialTheme.typography.labelMedium)
+                            Text("Supply:${expedition.currentSupply}/${expedition.maxSupply}", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -202,10 +220,12 @@ private fun HeroHpMpRow(hero: Hero) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        com.example.idledungeon.ui.component.HeroAvatar(hero = hero, size = 24.dp)
+        Spacer(Modifier.width(4.dp))
         Text(
-            "${hero.name.take(10)} ${hero.heroClass.name.take(3)}",
+            "${hero.name.take(8)} ${hero.heroClass.name.take(3)}",
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.width(110.dp)
+            modifier = Modifier.width(96.dp)
         )
         Column(modifier = Modifier.weight(1f)) {
             // HP 条
@@ -252,7 +272,9 @@ private data class EventCardData(
     val cardType: CardType
 )
 
-private enum class CardType { FLOOR_TITLE, COMBAT, LOOT, TRAP, STAIR, ROOM, SYSTEM }
+private enum class CardType {
+    FLOOR_TITLE, COMBAT, GUARDED, LOOT, PUZZLE, TRAP, STAIR, ROOM, SYSTEM
+}
 
 /** 将平面日志按空行分隔解析为卡片列表 */
 private fun parseLogToCards(log: List<String>): List<EventCardData> {
@@ -280,10 +302,10 @@ private fun buildCard(index: Int, lines: List<String>): EventCardData {
     val firstLine = lines.first()
     val type = when {
         firstLine.startsWith("==") -> CardType.FLOOR_TITLE
-        firstLine.contains("BOSS") || firstLine.contains("ENCOUNTER")
-            || firstLine.contains("GUARDED") || firstLine.contains("守护") -> CardType.COMBAT
-        firstLine.contains("LOOT") || firstLine.contains("宝箱")
-            || firstLine.contains("PUZZLE") || firstLine.contains("解谜") -> CardType.LOOT
+        firstLine.contains("GUARDED") || firstLine.contains("守护") -> CardType.GUARDED
+        firstLine.contains("PUZZLE") || firstLine.contains("解谜") -> CardType.PUZZLE
+        firstLine.contains("BOSS") || firstLine.contains("ENCOUNTER") -> CardType.COMBAT
+        firstLine.contains("LOOT") || firstLine.contains("宝箱") -> CardType.LOOT
         firstLine.contains("TRAP") || firstLine.contains("陷阱") -> CardType.TRAP
         firstLine.contains(">>") || firstLine.contains("STAIRS") -> CardType.STAIR
         firstLine.startsWith("[") -> CardType.ROOM
@@ -328,22 +350,26 @@ private fun EventCard(card: EventCardData, onClick: () -> Unit) {
 @Composable
 private fun cardContainerColor(t: CardType): Color = when (t) {
     CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.primaryContainer
-    CardType.COMBAT -> MaterialTheme.colorScheme.errorContainer
-    CardType.LOOT -> MaterialTheme.colorScheme.tertiaryContainer
-    CardType.TRAP -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
-    CardType.STAIR -> MaterialTheme.colorScheme.secondaryContainer
-    CardType.ROOM -> MaterialTheme.colorScheme.surfaceVariant
-    CardType.SYSTEM -> MaterialTheme.colorScheme.surfaceVariant
+    CardType.COMBAT      -> Color(0xFFFFCDD2)  // 浅红 — 普通战斗
+    CardType.GUARDED     -> Color(0xFFFFE0B2)  // 暖橙 — 宝物战斗 (战利品+战斗)
+    CardType.LOOT        -> MaterialTheme.colorScheme.tertiaryContainer  // 普通宝箱
+    CardType.PUZZLE      -> Color(0xFFB3E5FC)  // 浅蓝 — 解谜 (智力)
+    CardType.TRAP        -> Color(0xFFD7CCC8)  // 浅棕 — 陷阱 (不再半透明)
+    CardType.STAIR       -> MaterialTheme.colorScheme.secondaryContainer
+    CardType.ROOM        -> MaterialTheme.colorScheme.surfaceVariant
+    CardType.SYSTEM      -> MaterialTheme.colorScheme.surfaceVariant
 }
 
 @Composable
 private fun cardHeaderColor(t: CardType): Color = when (t) {
     CardType.FLOOR_TITLE -> MaterialTheme.colorScheme.onPrimaryContainer
-    CardType.COMBAT -> MaterialTheme.colorScheme.onErrorContainer
-    CardType.LOOT -> MaterialTheme.colorScheme.onTertiaryContainer
-    CardType.TRAP -> MaterialTheme.colorScheme.error
-    CardType.STAIR -> MaterialTheme.colorScheme.onSecondaryContainer
-    else -> MaterialTheme.colorScheme.onSurfaceVariant
+    CardType.COMBAT      -> Color(0xFFB71C1C)  // 深红
+    CardType.GUARDED     -> Color(0xFFE65100)  // 深橙
+    CardType.LOOT        -> MaterialTheme.colorScheme.onTertiaryContainer
+    CardType.PUZZLE      -> Color(0xFF01579B)  // 深蓝
+    CardType.TRAP        -> Color(0xFF4E342E)  // 深棕
+    CardType.STAIR       -> MaterialTheme.colorScheme.onSecondaryContainer
+    else                 -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /**
@@ -385,7 +411,7 @@ private fun EventDetailDialog(card: EventCardData, onDismiss: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(card.lines) { line ->
-                        val color = when {
+                        val baseColor = when {
                             line.contains("Victory") || line.contains("胜利") -> MaterialTheme.colorScheme.primary
                             line.contains("Defeat") || line.contains("败北") || line.contains("wiped") -> MaterialTheme.colorScheme.error
                             line.contains("Loot") || line.contains("Obtained") || line.contains("获得") -> MaterialTheme.colorScheme.tertiary
@@ -398,14 +424,42 @@ private fun EventDetailDialog(card: EventCardData, onDismiss: () -> Unit) {
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                         Text(
-                            line.trimStart(),
+                            text = colorizedLogLine(line.trimStart()),
                             style = MaterialTheme.typography.bodySmall,
-                            color = color
+                            color = baseColor
                         )
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * 把日志行里的 `HP:n/m` / `MP:n/m` / `CP:n` 串单独染色, 其它内容保持基础色.
+ */
+private fun colorizedLogLine(line: String): AnnotatedString {
+    val hpColor = Color(0xFFE53935)   // 红
+    val mpColor = Color(0xFF1E88E5)   // 蓝
+    val cpColor = Color(0xFF6A1B9A)   // 紫
+    val pattern = Regex("""(HP|MP|CP):\d+(?:/\d+)?""")
+    val matches = pattern.findAll(line).toList()
+    if (matches.isEmpty()) return AnnotatedString(line)
+    return buildAnnotatedString {
+        var lastEnd = 0
+        for (m in matches) {
+            if (m.range.first > lastEnd) append(line.substring(lastEnd, m.range.first))
+            val tone = when (m.value.take(2)) {
+                "HP" -> hpColor
+                "MP" -> mpColor
+                else -> cpColor
+            }
+            withStyle(SpanStyle(color = tone, fontWeight = FontWeight.SemiBold)) {
+                append(m.value)
+            }
+            lastEnd = m.range.last + 1
+        }
+        if (lastEnd < line.length) append(line.substring(lastEnd))
     }
 }
 

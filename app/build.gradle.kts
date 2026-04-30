@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    // alias(libs.plugins.ksp) // 暂不启用，等兼容 AGP 9.0
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.process)  // ProcessLifecycleOwner — 监听 App 前后台
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -53,10 +54,12 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     // Navigation
     implementation(libs.androidx.navigation.compose)
-    // Room (暂不启用，等 KSP 兼容 AGP 9.0 后再接入)
-    // implementation(libs.androidx.room.runtime)
-    // implementation(libs.androidx.room.ktx)
-    // ksp(libs.androidx.room.compiler)
+    // Room (持久化存档 — KSP 注解处理生成 DAO 实现)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+    // Gson (Room TypeConverter 用于嵌套 Map/List)
+    implementation(libs.gson)
     // Coil (图片加载)
     implementation(libs.coil.compose)
     // Test

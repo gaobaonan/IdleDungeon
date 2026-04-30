@@ -1,9 +1,13 @@
 package com.example.idledungeon.engine
 
 import com.example.idledungeon.data.ItemRegistry
+import com.example.idledungeon.data.MonsterRegistry
 import com.example.idledungeon.data.SpellRegistry
 import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
+import com.example.idledungeon.notification.ExpeditionEvent
+import com.example.idledungeon.notification.ExpeditionEventBus
+import com.example.idledungeon.viewmodel.advanceQuestsIfNeeded
 import com.example.idledungeon.viewmodel.GameUiState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,9 +24,13 @@ class ExplorationEngine {
 
     companion object {
         private const val BASE_INTERVAL_MS = 600L
-        private const val SUPPLY_NORMAL = 1
-        private const val SUPPLY_TRAP = 3
-        private const val SUPPLY_COMBAT = 2
+        // 每走一格 = 1 补给; 事件视情况额外消耗
+        private const val SUPPLY_STEP = 1
+        private const val SUPPLY_TRAP_DISARMED_EXTRA = 1   // 走 + 解除成功 = 2
+        private const val SUPPLY_TRAP_TRIGGERED_EXTRA = 5  // 走 + 触发陷阱 = 6
+        private const val SUPPLY_PUZZLE = 3                // 解谜不论成败固定 3
+        private const val SUPPLY_COMBAT = 10               // 普通战斗 / 守护宝藏
+        private const val SUPPLY_BOSS = 20                 // Boss 战
     }
 
     /** 本次冒险中到达过的房间 (BFS 不重复走) */
@@ -31,20 +39,32 @@ class ExplorationEngine {
     suspend fun run(session: ExpeditionSession, stateFlow: MutableStateFlow<GameUiState>) {
         visitedRooms.clear()
         val state = stateFlow.value
-        val layer = session.currentLayer
 
-        var currentFloor = state.currentFloor ?: DungeonGenerator.generate(layer)
+        // 优先复用上次冒险保留的地图; 没有则按 session.currentLayer 生成 (一般是 1)
+        val savedFloor = state.currentFloor
+        var currentFloor = savedFloor ?: DungeonGenerator.generate(session.currentLayer)
+        val layer = currentFloor.layer  // 实际楼层以地图为准, 而非 session
         val startPos = findStairsUp(currentFloor)
         visitedRooms.add(startPos)
         currentFloor = revealVisibility(currentFloor, startPos.first, startPos.second)
 
+        val resumed = savedFloor != null
+        val openingLog = if (resumed)
+            "== Floor $layer / 回到第${layer}层, 继续探索 =="
+        else
+            "== Floor $layer / 第${layer}层 探索开始 =="
+
         var s = session.copy(
             isExploring = true,
+            currentLayer = layer,
             posX = startPos.first, posY = startPos.second,
-            combatLog = listOf("== Floor $layer / 第${layer}层 探索开始 ==")
+            combatLog = listOf(openingLog)
         )
         stateFlow.update { it.copy(currentFloor = currentFloor, expedition = s) }
         delay(BASE_INTERVAL_MS)
+
+        // 记录撤退原因, 探索结束时一次性 emit Retreated 事件
+        var retreatReason: String? = null
 
         while (s.isExploring && s.currentSupply > 0) {
             // ── 主战术: 撤退判定 ──
@@ -52,6 +72,7 @@ class ExplorationEngine {
                 s = s.appendLog("")
                 s = s.appendLog("Tactic retreat / 战术撤退！")
                 s = s.copy(isExploring = false)
+                retreatReason = "战术撤退"
                 stateFlow.update { it.copy(expedition = s) }
                 break
             }
@@ -63,6 +84,7 @@ class ExplorationEngine {
                 s = s.appendLog("")
                 s = s.appendLog("No path forward / 无路可走，撤退...")
                 s = s.copy(isExploring = false)
+                retreatReason = "无路可走"
                 stateFlow.update { it.copy(expedition = s) }
                 break
             }
@@ -73,6 +95,14 @@ class ExplorationEngine {
             // 在 markVisited 之前判定: 是否首次进入此房间
             val firstEntry = isRoom && !node.label.startsWith("v")
             if (isRoom) visitedRooms.add(nx to ny)
+
+            // 主线任务: 累计探索房间数 (跨多次冒险) — 仅首次进入计数
+            if (firstEntry) {
+                stateFlow.update { st ->
+                    val gs = st.gameState.copy(roomsExplored = st.gameState.roomsExplored + 1)
+                    advanceQuestsIfNeeded(st.copy(gameState = gs))
+                }
+            }
 
             currentFloor = revealVisibility(currentFloor, nx, ny)
 
@@ -92,12 +122,11 @@ class ExplorationEngine {
             }
 
             val hasEvent = node.event != NodeEvent.NONE && node.event != NodeEvent.STAIRS_UP
-            val supplyCost: Int
+            var supplyCost: Int = SUPPLY_STEP   // 默认值: 走一格 1 点; 各事件会覆盖
             val log = mutableListOf<String>()
 
             if (!hasEvent) {
-                supplyCost = SUPPLY_NORMAL
-                // 仅首次进入空房间才记录，重新踏入不再写入日志
+                // 空格子: 默认 SUPPLY_STEP = 1
                 if (isRoom && node.event == NodeEvent.NONE && firstEntry) {
                     log.add("")
                     log.add("[ $roomName ] Entered / 进入 — nothing here / 平安无事")
@@ -107,7 +136,6 @@ class ExplorationEngine {
 
                 when (node.event) {
                     NodeEvent.TRAP -> {
-                        supplyCost = SUPPLY_TRAP
                         log.add(""); log.add("$header TRAP / 陷阱！")
                         val aliveHeroes = getPartyHeroes(stateFlow.value, s.party).filter { it.isAlive }
                         val maxDex = aliveHeroes.maxOfOrNull { it.effectiveStats[StatType.DEX] ?: 0 } ?: 0
@@ -116,17 +144,20 @@ class ExplorationEngine {
                         log.add("  解除判定: 最高 DEX $maxDex vs 难度 $baseDiff → ${chance}%")
                         if (kotlin.random.Random.nextInt(100) < chance) {
                             log.add("  Disarmed / 成功解除！")
+                            supplyCost = SUPPLY_STEP + SUPPLY_TRAP_DISARMED_EXTRA  // 2
                         } else {
                             val trapDmg = 5 * s.currentLayer
-                            val partyHeroes = getPartyHeroes(stateFlow.value, s.party)
-                            if (partyHeroes.isNotEmpty()) {
-                                val damaged = partyHeroes.map { it.copy(currentHp = (it.currentHp - trapDmg).coerceAtLeast(0)) }
+                            // 仅对存活英雄结算伤害, 已倒下英雄不重复打 0 伤害日志
+                            val alive = getPartyHeroes(stateFlow.value, s.party).filter { it.isAlive }
+                            if (alive.isNotEmpty()) {
+                                val damaged = alive.map { it.copy(currentHp = (it.currentHp - trapDmg).coerceAtLeast(0)) }
                                 updateHeroes(stateFlow, damaged)
-                                log.add("  Triggered! 全体受到 $trapDmg 点伤害")
+                                log.add("  Triggered! 存活英雄受到 $trapDmg 点伤害")
                                 damaged.forEach { h -> log.add("  ${h.name}: HP ${h.currentHp}/${h.maxHp}") }
                                 val downed = damaged.filter { it.currentHp <= 0 }.map { it.id }.toSet()
                                 if (downed.isNotEmpty()) s = s.copy(downedHeroIds = s.downedHeroIds + downed)
                             }
+                            supplyCost = SUPPLY_STEP + SUPPLY_TRAP_TRIGGERED_EXTRA  // 6
                         }
                         currentFloor = clearEvent(currentFloor, nx, ny)
                     }
@@ -138,6 +169,7 @@ class ExplorationEngine {
                             val result = CombatEngine.fight(heroes, node.monsterIds, s.carriedItems)
                             log.addAll(result.log)
                             updateHeroes(stateFlow, result.updatedHeroes)
+                            recordKills(stateFlow, result.killedMonsterIds)
                             s = s.copy(
                                 backpack = s.backpack + result.droppedItems,
                                 carriedItems = result.remainingCarriedItems,
@@ -151,11 +183,12 @@ class ExplorationEngine {
                                 visitedRooms.remove(nx to ny)
                                 currentFloor = unmarkVisited(currentFloor, nx, ny)
                                 s = s.copy(isExploring = false)
+                                retreatReason = "遭遇战失败，全员重伤"
                             }
                         } else { supplyCost.let { } }
                     }
                     NodeEvent.LOOT -> {
-                        supplyCost = SUPPLY_NORMAL
+                        supplyCost = SUPPLY_STEP  // 普通宝箱不算事件成本, 跟空格子一样
                         log.add(""); log.add("$header LOOT / 发现宝箱！")
                         val loot = node.lootTable.filter { (_, c) -> kotlin.random.Random.nextInt(100) < c }.keys.toList()
                         if (loot.isNotEmpty()) {
@@ -167,7 +200,7 @@ class ExplorationEngine {
                         currentFloor = clearEvent(currentFloor, nx, ny)
                     }
                     NodeEvent.PUZZLE -> {
-                        supplyCost = SUPPLY_NORMAL
+                        supplyCost = SUPPLY_PUZZLE  // 解谜固定 3 (不论成败)
                         log.add(""); log.add("$header PUZZLE / 解谜！")
                         val aliveHeroes = getPartyHeroes(stateFlow.value, s.party).filter { it.isAlive }
                         val maxInt = aliveHeroes.maxOfOrNull { it.effectiveStats[StatType.INT] ?: 0 } ?: 0
@@ -195,6 +228,7 @@ class ExplorationEngine {
                             val result = CombatEngine.fight(heroes, node.monsterIds, s.carriedItems)
                             log.addAll(result.log)
                             updateHeroes(stateFlow, result.updatedHeroes)
+                            recordKills(stateFlow, result.killedMonsterIds)
                             s = s.copy(
                                 backpack = s.backpack + result.droppedItems,
                                 carriedItems = result.remainingCarriedItems,
@@ -202,12 +236,32 @@ class ExplorationEngine {
                             )
                             if (result.victory) {
                                 log.add("Treasure unsealed / 宝箱解封！")
-                                val loot = node.lootTable.filter { (_, c) -> kotlin.random.Random.nextInt(100) < c }.keys.toList()
+                                // 苔纹剑保底: F2 累计 5 个守护宝箱未掉剑则强制掉落
+                                val swordEligible = s.currentLayer == 2 && QUEST_EPIC_SWORD_ID in node.lootTable
+                                val haveSword = QUEST_EPIC_SWORD_ID in stateFlow.value.gameState.foundItemIds
+                                    || QUEST_EPIC_SWORD_ID in s.backpack
+                                val forceSword = swordEligible && !haveSword
+                                    && stateFlow.value.gameState.f2ChestPity >= 4  // 第 5 个保底
+                                val loot = node.lootTable.filter { (id, c) ->
+                                    if (forceSword && id == QUEST_EPIC_SWORD_ID) true
+                                    else kotlin.random.Random.nextInt(100) < c
+                                }.keys.toList()
                                 if (loot.isNotEmpty()) {
                                     s = s.copy(backpack = s.backpack + loot)
-                                    log.add("  Obtained / 获得: ${loot.joinToString()}")
+                                    log.add("  Obtained / 获得: ${loot.joinToString()}" +
+                                        if (forceSword) "  [保底]" else "")
                                 } else {
                                     log.add("  Empty chest... / 空箱子...")
+                                }
+                                // 更新保底计数
+                                if (swordEligible && !haveSword) {
+                                    val gotSword = QUEST_EPIC_SWORD_ID in loot
+                                    stateFlow.update { state ->
+                                        state.copy(gameState = state.gameState.copy(
+                                            f2ChestPity = if (gotSword) 0
+                                                          else state.gameState.f2ChestPity + 1
+                                        ))
+                                    }
                                 }
                                 currentFloor = clearEvent(currentFloor, nx, ny)
                             } else {
@@ -215,17 +269,19 @@ class ExplorationEngine {
                                 visitedRooms.remove(nx to ny)
                                 currentFloor = unmarkVisited(currentFloor, nx, ny)
                                 s = s.copy(isExploring = false)
+                                retreatReason = "守护宝藏战斗失败"
                             }
                         }
                     }
                     NodeEvent.BOSS_FIGHT -> {
-                        supplyCost = SUPPLY_COMBAT * 2
+                        supplyCost = SUPPLY_BOSS
                         val heroes = getPartyHeroes(stateFlow.value, s.party)
                         if (node.monsterIds.isNotEmpty() && heroes.isNotEmpty()) {
                             log.add(""); log.add("$header ★ BOSS BATTLE / Boss战！ ★")
                             val result = CombatEngine.fight(heroes, node.monsterIds, s.carriedItems)
                             log.addAll(result.log)
                             updateHeroes(stateFlow, result.updatedHeroes)
+                            recordKills(stateFlow, result.killedMonsterIds)
                             s = s.copy(
                                 backpack = s.backpack + result.droppedItems,
                                 carriedItems = result.remainingCarriedItems,
@@ -234,16 +290,30 @@ class ExplorationEngine {
                             if (result.victory) {
                                 log.add("★ Boss defeated! / Boss被击败！ ★")
                                 currentFloor = clearEvent(currentFloor, nx, ny)
+                                // 后台事件: Boss 击败
+                                val bossName = node.monsterIds.firstOrNull()?.let {
+                                    try { MonsterRegistry.spawn(it).name } catch (_: Exception) { it }
+                                } ?: "Boss"
+                                ExpeditionEventBus.emit(ExpeditionEvent.BossDefeated(bossName, s.currentLayer))
+                                // 主线任务: 记录该层 Boss 已击败
+                                val defeatedLayer = s.currentLayer
+                                stateFlow.update { st ->
+                                    val gs = st.gameState.copy(
+                                        bossesDefeated = st.gameState.bossesDefeated + defeatedLayer
+                                    )
+                                    advanceQuestsIfNeeded(st.copy(gameState = gs))
+                                }
                             } else {
                                 log.add("Defeated by Boss... / 被Boss击倒...全员重伤！")
                                 visitedRooms.remove(nx to ny)
                                 currentFloor = unmarkVisited(currentFloor, nx, ny)
                                 s = s.copy(isExploring = false)
+                                retreatReason = "被 Boss 击倒，全员重伤"
                             }
                         } else { supplyCost.let { } }
                     }
                     NodeEvent.STAIRS_DOWN -> {
-                        supplyCost = SUPPLY_NORMAL
+                        supplyCost = SUPPLY_STEP
                         log.add(""); log.add("$header >> STAIRS DOWN / 发现下行楼梯！")
                         val newLayer = s.currentLayer + 1
                         currentFloor = DungeonGenerator.generate(newLayer, entryX = nx, entryY = ny)
@@ -253,8 +323,10 @@ class ExplorationEngine {
                         currentFloor = revealVisibility(currentFloor, newStart.first, newStart.second)
                         s = s.copy(currentLayer = newLayer, posX = newStart.first, posY = newStart.second)
                         log.add(""); log.add("== Floor $newLayer / 第${newLayer}层 探索开始 ==")
+                        // 后台事件: 楼层变化
+                        ExpeditionEventBus.emit(ExpeditionEvent.FloorChanged(newLayer))
                     }
-                    else -> { supplyCost = SUPPLY_NORMAL }
+                    else -> { supplyCost = SUPPLY_STEP }
                 }
 
                 // 战后/陷阱后自动恢复 (持续到无法再恢复)
@@ -286,12 +358,14 @@ class ExplorationEngine {
             if (s.currentSupply <= 0) {
                 s = s.appendLog(""); s = s.appendLog("Out of supplies! Retreating... / 补给耗尽！撤退...")
                 s = s.copy(isExploring = false)
+                retreatReason = retreatReason ?: "补给耗尽"
                 stateFlow.update { it.copy(expedition = s) }; break
             }
             val alive = getPartyHeroes(stateFlow.value, s.party)
             if (alive.none { it.isAlive }) {
                 s = s.appendLog(""); s = s.appendLog("All heroes injured! / 全员重伤！")
                 s = s.copy(isExploring = false)
+                retreatReason = retreatReason ?: "全员重伤"
                 stateFlow.update { it.copy(expedition = s) }; break
             }
 
@@ -301,6 +375,8 @@ class ExplorationEngine {
 
         // ── 探索结束 ──
         if (s.isExploring) s = s.copy(isExploring = false)
+        // 后台事件: 撤退/探索结束
+        ExpeditionEventBus.emit(ExpeditionEvent.Retreated(retreatReason ?: "探索结束"))
         s = s.appendLog("")
         s = s.appendLog("== Expedition ended / 探索结束 ==")
         s = s.appendLog(if (s.backpack.isNotEmpty()) "Loot / 战利品: ${s.backpack.joinToString()}" else "No loot / 无战利品")
@@ -435,7 +511,7 @@ class ExplorationEngine {
         return true
     }
 
-    /** 喝一次生命药水 (最低血英雄, 大瓶优先) */
+    /** 喝一次生命药水 (最低血英雄; 优先用恰好够补满的最小瓶, 退而求其次小瓶) */
     private fun tryHealthPotionOnce(
         party: List<PartySlot>,
         stateFlow: MutableStateFlow<GameUiState>,
@@ -449,24 +525,28 @@ class ExplorationEngine {
             .filter { it.currentHp.toFloat() / it.maxHp < threshold }
             .minByOrNull { it.currentHp.toFloat() / it.maxHp } ?: return false
 
-        val potionId = when {
-            "great_health_potion" in carriedItems -> "great_health_potion"
-            "health_potion" in carriedItems -> "health_potion"
-            else -> return false
-        }
-        val healAmt = if (potionId == "great_health_potion") 150 else 50
-        carriedItems.remove(potionId)
-        val newHp = (patient.currentHp + healAmt).coerceAtMost(patient.maxHp)
-        val itemName = try { ItemRegistry.get(potionId).name } catch (_: Exception) { potionId }
-        log.add("  ${patient.name} uses $itemName → HP ${patient.currentHp}→$newHp")
+        val potions = carriedItems.distinct().mapNotNull {
+            try { ItemRegistry.get(it).takeIf { i -> i.restoreHp > 0 } } catch (_: Exception) { null }
+        }.sortedBy { it.restoreHp }
+        if (potions.isEmpty()) return false
 
+        // 选: 至少一半药效不浪费的瓶子里最小那瓶; 没有合适的就用最小瓶 (兜底)
+        val deficit = patient.maxHp - patient.currentHp
+        val potion = potions.firstOrNull { deficit >= (it.restoreHp + 1) / 2 } ?: potions.first()
+
+        carriedItems.remove(potion.id)
+        val newHp = (patient.currentHp + potion.restoreHp).coerceAtMost(patient.maxHp)
+        log.add("  ${patient.name} uses ${potion.name} → HP ${patient.currentHp}→$newHp")
         stateFlow.update { st ->
             st.copy(heroes = st.heroes.map { if (it.id == patient.id) it.copy(currentHp = newHp) else it })
         }
         return true
     }
 
-    /** 喝一次魔法药水: 任意英雄 currentMp < 某瓶恢复量则喝。小瓶优先以免浪费。 */
+    /**
+     * 喝一次魔法药水: 找一瓶能被吸收至少一半 (即英雄 MP 亏空 ≥ 0.5×药水量) 的瓶子, 给亏空最大的英雄喝.
+     * 关键修复: 之前的 `currentMp < restore` 在 maxMp < restore 时永远 true, 满血也喝, 会把全部蓝瓶清空.
+     */
     private fun tryManaPotionOnce(
         party: List<PartySlot>,
         stateFlow: MutableStateFlow<GameUiState>,
@@ -477,16 +557,20 @@ class ExplorationEngine {
         val heroes = getPartyHeroes(state, party).filter { it.isAlive && it.maxMp > 0 }
         if (heroes.isEmpty()) return false
 
-        // 小瓶优先 (mana_potion 30 / great_mana_potion 100)
-        val potionTypes = listOf("mana_potion" to 30, "great_mana_potion" to 100)
-        for ((potionId, restore) in potionTypes) {
-            if (potionId !in carriedItems) continue
-            val candidate = heroes.filter { it.currentMp < restore }
-                .minByOrNull { it.currentMp } ?: continue
-            carriedItems.remove(potionId)
-            val newMp = (candidate.currentMp + restore).coerceAtMost(candidate.maxMp)
-            val itemName = try { ItemRegistry.get(potionId).name } catch (_: Exception) { potionId }
-            log.add("  ${candidate.name} uses $itemName → MP ${candidate.currentMp}→$newMp")
+        // 仓中所有蓝瓶, 小瓶优先 (减少浪费)
+        val potions = carriedItems.distinct().mapNotNull {
+            try { ItemRegistry.get(it).takeIf { i -> i.restoreMp > 0 } } catch (_: Exception) { null }
+        }.sortedBy { it.restoreMp }
+        if (potions.isEmpty()) return false
+
+        for (potion in potions) {
+            val needed = (potion.restoreMp + 1) / 2  // 至少吸收一半才算值
+            val candidate = heroes
+                .filter { (it.maxMp - it.currentMp) >= needed }
+                .maxByOrNull { it.maxMp - it.currentMp } ?: continue
+            carriedItems.remove(potion.id)
+            val newMp = (candidate.currentMp + potion.restoreMp).coerceAtMost(candidate.maxMp)
+            log.add("  ${candidate.name} uses ${potion.name} → MP ${candidate.currentMp}→$newMp")
             stateFlow.update { st ->
                 st.copy(heroes = st.heroes.map { if (it.id == candidate.id) it.copy(currentMp = newMp) else it })
             }
@@ -506,7 +590,9 @@ class ExplorationEngine {
         if (heroes.isEmpty()) return false
 
         // 是否有回复手段 (生命药水 或 治疗法术)
-        val hasHealPotion = session.carriedItems.any { it == "health_potion" || it == "great_health_potion" }
+        val hasHealPotion = session.carriedItems.any { id ->
+            try { ItemRegistry.get(id).restoreHp > 0 } catch (_: Exception) { false }
+        }
         val hasHealSpell = heroes.any { hero ->
             val canCast = hero.heroClass == HeroClass.CLERIC
             canCast && hero.spells.any { spell ->
@@ -709,6 +795,16 @@ class ExplorationEngine {
     private fun getPartyHeroes(state: GameUiState, party: List<PartySlot>): List<Hero> =
         party.mapNotNull { slot -> state.heroes.find { it.id == slot.heroId } }
 
+    /** 把本场战斗击败的怪物累加到图鉴 (monsterKills) */
+    private fun recordKills(stateFlow: MutableStateFlow<GameUiState>, killedIds: List<String>) {
+        if (killedIds.isEmpty()) return
+        stateFlow.update { state ->
+            val newKills = state.gameState.monsterKills.toMutableMap()
+            for (id in killedIds) newKills[id] = (newKills[id] ?: 0) + 1
+            state.copy(gameState = state.gameState.copy(monsterKills = newKills))
+        }
+    }
+
     private fun updateHeroes(stateFlow: MutableStateFlow<GameUiState>, updatedHeroes: List<Hero>) {
         stateFlow.update { state ->
             val map = updatedHeroes.associateBy { it.id }
@@ -730,7 +826,14 @@ class ExplorationEngine {
         if (backpack.isEmpty()) return
         stateFlow.update { state ->
             val items = backpack.mapNotNull { id -> try { ItemRegistry.get(id) } catch (_: Exception) { null } }
-            state.copy(inventory = state.inventory + items)
+            // 主线任务: 把本次拿到的物品加进 foundItemIds, 推进任务
+            val newGameState = state.gameState.copy(
+                foundItemIds = state.gameState.foundItemIds + backpack.toSet()
+            )
+            advanceQuestsIfNeeded(state.copy(
+                inventory = state.inventory + items,
+                gameState = newGameState
+            ))
         }
     }
 

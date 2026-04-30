@@ -26,7 +26,6 @@ fun BlacksmithScreen(
     investCost: Int,
     onBuy: (String) -> Unit,
     onInvest: () -> Unit,
-    onRefresh: () -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -39,7 +38,6 @@ fun BlacksmithScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onRefresh) { Text("Refresh\n[DEBUG]") }
                     TextButton(onClick = onInvest) { Text("Invest / 投资") }
                 }
             )
@@ -57,7 +55,7 @@ fun BlacksmithScreen(
             }
             if (availableItems.isEmpty()) {
                 item {
-                    Text("Sold out / 已售罄 — 点击 [DEBUG] Refresh 刷新",
+                    Text("Sold out / 已售罄 — 明日 0 点自动刷新",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 24.dp))
                 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 fun TownScreen(
     playerName: String,
     gold: Int,
+    guildHasUnreadQuest: Boolean = false,
     onGuildClick: () -> Unit,
     onTavernClick: () -> Unit,
     onBlacksmithClick: () -> Unit,
@@ -47,15 +48,20 @@ fun TownScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BuildingIcon("Guild\n公会", Icons.Default.AccountBalance, onGuildClick)
-                BuildingIcon("Tavern\n酒馆", Icons.Default.LocalBar, onTavernClick)
+                BuildingIcon(
+                    label = "Guild\n公会",
+                    icon = Icons.Default.AccountBalance,
+                    showBadge = guildHasUnreadQuest,
+                    onClick = onGuildClick
+                )
+                BuildingIcon("Tavern\n酒馆", Icons.Default.LocalBar, onClick = onTavernClick)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BuildingIcon("Smith\n铁匠铺", Icons.Default.Build, onBlacksmithClick)
-                BuildingIcon("Shop\n道具店", Icons.Default.ShoppingCart, onItemShopClick)
+                BuildingIcon("Smith\n铁匠铺", Icons.Default.Build, onClick = onBlacksmithClick)
+                BuildingIcon("Shop\n道具店", Icons.Default.ShoppingCart, onClick = onItemShopClick)
             }
             // 城门
             FilledTonalButton(onClick = onGateClick) {
@@ -108,16 +114,41 @@ private fun PlayerInfoBar(playerName: String, gold: Int) {
 }
 
 @Composable
-private fun BuildingIcon(label: String, icon: ImageVector, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .size(100.dp)
-            .clickable(onClick = onClick),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(icon, contentDescription = label, modifier = Modifier.size(40.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall)
+private fun BuildingIcon(
+    label: String,
+    icon: ImageVector,
+    showBadge: Boolean = false,
+    onClick: () -> Unit
+) {
+    Box(modifier = Modifier.size(100.dp).clickable(onClick = onClick)) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(40.dp))
+            Spacer(Modifier.height(4.dp))
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
+        // 红色感叹号 (任务更新提示)
+        if (showBadge) {
+            Surface(
+                color = androidx.compose.ui.graphics.Color(0xFFE53935),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp)
+                    .padding(2.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        "!",
+                        color = androidx.compose.ui.graphics.Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }

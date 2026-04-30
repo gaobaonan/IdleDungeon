@@ -32,7 +32,7 @@ object MonsterRegistry {
         // ──── L2 (target ~160) ────
         Monster(id = "giant_bat", name = "巨型蝙蝠", level = 2,
             currentHp = 40, maxHp = 40, attack = 9, defense = 2,
-            skills = listOf(MonsterSkill("sk_bat_drain", "吸血", "吸取生命", SkillEffect.HEAL, 0.7f, 30)),
+            // 原 sk_bat_drain (HEAL) 已删除, 蝙蝠现为无技能纯肉
             dropChances = mapOf("monster_bone" to 25, "spider_silk" to 5)),
         Monster(id = "goblin", name = "哥布林", level = 2,
             currentHp = 60, maxHp = 60, attack = 6, defense = 5,
@@ -45,7 +45,7 @@ object MonsterRegistry {
         Monster(id = "carrion_bat", name = "食腐蝠", level = 3,
             currentHp = 55, maxHp = 55, attack = 14, defense = 4,
             skills = listOf(MonsterSkill("sk_carrion_strike", "暗袭", "扑面突袭", SkillEffect.HEAVY_STRIKE, 1.6f, 30)),
-            dropChances = mapOf("monster_bone" to 35, "antidote" to 10)),
+            dropChances = mapOf("monster_bone" to 35, "health_potion" to 8)),
         Monster(id = "goblin_warrior", name = "哥布林战士", level = 3,
             currentHp = 90, maxHp = 90, attack = 10, defense = 7,
             dropChances = mapOf("goblin_ear" to 50, "iron_ore" to 30, "iron_shortsword" to 5)),
@@ -68,11 +68,11 @@ object MonsterRegistry {
         // ──── L5 (target ~400) ────
         Monster(id = "venom_spider", name = "毒蛛", level = 5,
             currentHp = 120, maxHp = 120, attack = 23, defense = 5,
-            skills = listOf(MonsterSkill("sk_venom_fang", "毒牙", "注入剧毒", SkillEffect.POISON, 0.5f, 35)),
-            dropChances = mapOf("spider_silk" to 50, "antidote" to 25)),
+            // 原 sk_venom_fang (POISON) 已删除
+            dropChances = mapOf("spider_silk" to 50, "mid_health_potion" to 8)),
         Monster(id = "ghoul", name = "食尸鬼", level = 5,
             currentHp = 170, maxHp = 170, attack = 16, defense = 10,
-            dropChances = mapOf("monster_bone" to 50, "antidote" to 15, "ancient_coin" to 5)),
+            dropChances = mapOf("monster_bone" to 50, "mid_mana_potion" to 6, "ancient_coin" to 5)),
         Monster(id = "dwarven_guard", name = "矮人守卫", level = 5,
             currentHp = 170, maxHp = 170, attack = 9, defense = 20,
             dropChances = mapOf("iron_ore" to 50, "monster_bone" to 30, "chain_mail" to 4)),
@@ -132,8 +132,8 @@ object MonsterRegistry {
         Monster(id = "shadow_dragon_whelp", name = "影龙幼崽", level = 10,
             currentHp = 195, maxHp = 195, attack = 38, defense = 10,
             skills = listOf(
-                MonsterSkill("sk_dark_breath", "黑暗吐息", "腐蚀气息", SkillEffect.HEAVY_STRIKE, 2.0f, 30),
-                MonsterSkill("sk_shadow_step", "影遁", "暗影回避", SkillEffect.HEAL, 0.8f, 25)
+                MonsterSkill("sk_dark_breath", "黑暗吐息", "腐蚀气息", SkillEffect.HEAVY_STRIKE, 2.0f, 30)
+                // 原 sk_shadow_step (HEAL) 已删除
             ),
             dropChances = mapOf("dragon_scale" to 8, "magic_crystal" to 50, "dark_shard" to 30)),
         Monster(id = "abyssal_warrior", name = "深渊战士", level = 10,
@@ -147,8 +147,8 @@ object MonsterRegistry {
         Monster(id = "hellfire_imp", name = "地狱火妖", level = 11,
             currentHp = 210, maxHp = 210, attack = 42, defense = 11,
             skills = listOf(
-                MonsterSkill("sk_hellfire_blast", "烈焰冲击", "炽焰一击", SkillEffect.HEAVY_STRIKE, 2.0f, 30),
-                MonsterSkill("sk_burning_curse", "燃焰诅咒", "持续灼烧", SkillEffect.POISON, 0.6f, 30)
+                MonsterSkill("sk_hellfire_blast", "烈焰冲击", "炽焰一击", SkillEffect.HEAVY_STRIKE, 2.0f, 30)
+                // 原 sk_burning_curse (POISON) 已删除
             ),
             dropChances = mapOf("magic_crystal" to 50, "dark_shard" to 40, "lich_phylactery" to 10, "flame_sword" to 5)),
         Monster(id = "crimson_lord", name = "赤红领主", level = 11,
@@ -167,8 +167,8 @@ object MonsterRegistry {
             currentHp = 150, maxHp = 150, attack = 16, defense = 12,
             skills = listOf(
                 MonsterSkill("sk_king_bite", "王者啃咬", "王者一咬", SkillEffect.HEAVY_STRIKE, 1.8f, 35),
-                MonsterSkill("sk_rat_roar", "鼠王战吼", "震慑全场", SkillEffect.STUN, 0.0f, 25),
-                MonsterSkill("sk_feast", "啃食愈合", "啃食回复", SkillEffect.HEAL, 0.8f, 20)
+                MonsterSkill("sk_rat_roar", "鼠王战吼", "震慑全场", SkillEffect.STUN, 0.0f, 25)
+                // 原 sk_feast (HEAL) 已删除
             ),
             dropChances = mapOf("monster_bone" to 80, "slime_gel" to 60, "ancient_coin" to 30, "iron_ring" to 15)),
 
@@ -177,8 +177,8 @@ object MonsterRegistry {
             currentHp = 250, maxHp = 250, attack = 28, defense = 20,
             skills = listOf(
                 MonsterSkill("sk_chieftain_smash", "巨锤碎击", "碎骨重击", SkillEffect.HEAVY_STRIKE, 1.8f, 30),
-                MonsterSkill("sk_war_cry", "战吼", "战意鼓舞", SkillEffect.STUN, 0.0f, 25),
-                MonsterSkill("sk_rally_heal", "团结之力", "鼓舞自愈", SkillEffect.HEAL, 0.8f, 25)
+                MonsterSkill("sk_war_cry", "战吼", "战意鼓舞", SkillEffect.STUN, 0.0f, 25)
+                // 原 sk_rally_heal (HEAL) 已删除
             ),
             dropChances = mapOf("goblin_ear" to 100, "iron_ore" to 80, "magic_crystal" to 30, "iron_long_sword" to 15, "knight_great_sword" to 12)),
 
@@ -197,8 +197,8 @@ object MonsterRegistry {
             currentHp = 450, maxHp = 450, attack = 55, defense = 32,
             skills = listOf(
                 MonsterSkill("sk_death_blade", "死亡之剑", "死神之剑斩落", SkillEffect.HEAVY_STRIKE, 2.2f, 30),
-                MonsterSkill("sk_dark_curse", "黑暗诅咒", "持续侵蚀", SkillEffect.POISON, 0.8f, 30),
-                MonsterSkill("sk_undead_call", "亡灵召唤", "召唤亡魂回血", SkillEffect.HEAL, 1.0f, 25)
+                MonsterSkill("sk_death_aura", "死亡气息", "撕裂魂魄", SkillEffect.STUN, 1.0f, 25)
+                // 原 sk_dark_curse (POISON) / sk_undead_call (HEAL) 已删除, 用 STUN 替代保留 boss 特色
             ),
             dropChances = mapOf("dark_shard" to 70, "magic_crystal" to 60, "lich_phylactery" to 25, "plate_armor" to 12)),
 

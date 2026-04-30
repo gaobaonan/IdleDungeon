@@ -41,7 +41,10 @@ fun TavernScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onInvest) { Text("Invest / 投资") }
+                    val isMax = tavernLevel >= 10
+                    TextButton(onClick = onInvest, enabled = !isMax) {
+                        Text(if (isMax) "MAX / 已满" else "Invest / 投资")
+                    }
                 }
             )
         }
@@ -71,8 +74,7 @@ private fun HeroRecruitCard(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // TODO: 头像 (预设头像系统)
-            Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(48.dp))
+            com.example.idledungeon.ui.component.HeroAvatar(hero = hero, size = 48.dp)
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(hero.name, style = MaterialTheme.typography.titleSmall)

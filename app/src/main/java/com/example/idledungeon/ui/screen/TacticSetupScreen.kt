@@ -25,10 +25,15 @@ fun TacticSetupScreen(
     consumables: List<Item>,
     carriedItemIds: List<String>,
     maxCarry: Int,
+    defaultSupply: Int,           // 出战默认补给 (酒馆等级决定)
+    purchasedSupply: Int,         // 战术界面已加购的额外补给
+    gold: Int,                    // 当前金币 (限制能否再买)
     onTacticChange: (TacticType) -> Unit,
     onSecondaryTacticChange: (SecondaryTactic) -> Unit,
     onAddItem: (String) -> Unit,
     onRemoveItem: (String) -> Unit,
+    onBuySupply: () -> Unit,      // +5 补给, -1 金币
+    onRefundSupply: () -> Unit,   // -5 补给, +1 金币
     onConfirm: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -95,6 +100,69 @@ fun TacticSetupScreen(
                         label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                         modifier = Modifier.weight(1f)
                     )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── 补给购买 ──
+            Text(
+                "Supplies / 补给",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(8.dp))
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("默认补给", style = MaterialTheme.typography.bodyMedium)
+                        Text("$defaultSupply", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("加购补给", style = MaterialTheme.typography.bodyMedium)
+                        Text("+$purchasedSupply  (花费 ${purchasedSupply / 5} G)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("出战总补给",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary)
+                        Text("${defaultSupply + purchasedSupply}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledIconButton(
+                            onClick = onRefundSupply,
+                            enabled = purchasedSupply >= 5,
+                            modifier = Modifier.size(36.dp)
+                        ) { Text("-") }
+                        Text(
+                            "1G = +5 补给  (持有 $gold G)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledIconButton(
+                            onClick = onBuySupply,
+                            enabled = gold >= 1,
+                            modifier = Modifier.size(36.dp)
+                        ) { Text("+") }
+                    }
                 }
             }
 
