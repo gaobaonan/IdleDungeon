@@ -1,6 +1,5 @@
 package com.example.idledungeon.ui.screen
 
-import android.graphics.Paint as NativePaint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -19,7 +18,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -39,8 +37,7 @@ fun DungeonScreen(
     heroes: List<Hero>,
     deepestFloor: Int,
     onDepart: () -> Unit,
-    onBack: () -> Unit,
-    onDebugRefresh: (() -> Unit)? = null
+    onBack: () -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     // 订阅事件总线: 探险结束时弹 Snackbar 通知玩家
@@ -62,11 +59,6 @@ fun DungeonScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    if (onDebugRefresh != null) {
-                        TextButton(onClick = onDebugRefresh) { Text("[DEBUG]\nRefresh") }
                     }
                 }
             )
@@ -491,20 +483,10 @@ private fun DungeonMapCanvas(floor: DungeonFloor, expedition: ExpeditionSession?
         val cellSize = minOf(size.width / floor.width, size.height / floor.height)
         val gap = (cellSize * 0.08f).coerceAtMost(2f)
 
-        val textPaint = NativePaint().apply {
-            color = android.graphics.Color.WHITE
-            textSize = cellSize * 0.45f
-            textAlign = NativePaint.Align.CENTER
-            isFakeBoldText = true
-        }
-
         for (y in floor.grid.indices) {
             for (x in floor.grid[y].indices) {
                 val node = floor.grid[y][x]
-                val rawLabel = node.label
-                val isVisited = rawLabel.startsWith("v")
-                val displayLabel = if (isVisited) rawLabel.removePrefix("v") else rawLabel
-                val hasLabel = displayLabel.isNotEmpty()
+                val isRoomCell = node.roomNumber != null
 
                 val color = if (!node.explored) {
                     Color(0xFF555565)
@@ -512,12 +494,12 @@ private fun DungeonMapCanvas(floor: DungeonFloor, expedition: ExpeditionSession?
                     NodeType.WALL -> Color(0xFF1A1A2E)
                     NodeType.ROOM,
                     NodeType.CORRIDOR -> when {
-                        hasLabel && isVisited -> Color(0xFFDD9933)
-                        hasLabel -> Color(0xFF776644)
+                        isRoomCell && node.visited -> Color(0xFFDD9933)
+                        isRoomCell -> Color(0xFF776644)
                         else -> Color(0xFFB0B0B8)
                     }
                     NodeType.BOSS_ROOM ->
-                        if (isVisited) Color(0xFFCC3333) else Color(0xFF882222)
+                        if (node.visited) Color(0xFFCC3333) else Color(0xFF882222)
                     NodeType.STAIRS -> when (node.event) {
                         NodeEvent.STAIRS_UP -> Color(0xFF33AACC)
                         NodeEvent.STAIRS_DOWN -> Color(0xFF3366CC)
@@ -536,15 +518,6 @@ private fun DungeonMapCanvas(floor: DungeonFloor, expedition: ExpeditionSession?
                         color = Color.Green,
                         radius = cellSize / 3,
                         center = Offset(x * cellSize + cellSize / 2, y * cellSize + cellSize / 2)
-                    )
-                }
-
-                if (hasLabel && node.explored) {
-                    drawContext.canvas.nativeCanvas.drawText(
-                        displayLabel,
-                        x * cellSize + cellSize / 2,
-                        y * cellSize + cellSize / 2 + textPaint.textSize / 3,
-                        textPaint
                     )
                 }
             }

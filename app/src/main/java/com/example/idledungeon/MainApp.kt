@@ -1,10 +1,18 @@
 package com.example.idledungeon
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -17,9 +25,6 @@ import com.example.idledungeon.ui.navigation.Route
 import com.example.idledungeon.ui.screen.*
 import com.example.idledungeon.viewmodel.GameViewModel
 
-/**
- * 全局导航节流：lifecycle 检查 + 时间防抖，防止动画期间重复导航
- */
 private var lastNavTime = 0L
 private const val NAV_DEBOUNCE_MS = 300L
 
@@ -39,17 +44,13 @@ private fun NavController.popBackStackSafe(): Boolean {
     return popBackStack()
 }
 
-/**
- * 主程序入口 - Navigation Host
- * 所有屏幕的导航在此统一管理
- */
 @Composable
 fun MainApp() {
     val navController = rememberNavController()
     val vm: GameViewModel = viewModel()
     val state by vm.uiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // 每次 App 进入前台时检查一次"日期是否变化"; 若进入了新一天则刷新铁匠铺/道具店/酒馆
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -59,9 +60,29 @@ fun MainApp() {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    LaunchedEffect(Unit) {
+        vm.userMessages.collect { msg ->
+            snackbarHostState.showSnackbar(message = msg, duration = SnackbarDuration.Short)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHostBody(navController, vm, state)
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+    }
+}
+
+@Composable
+private fun NavHostBody(
+    navController: androidx.navigation.NavHostController,
+    vm: GameViewModel,
+    state: com.example.idledungeon.viewmodel.GameUiState
+) {
     NavHost(navController = navController, startDestination = Route.START) {
 
-        // ── 开始菜单 ──
         composable(Route.START) {
             StartScreen(
                 hasExistingSave = state.gameState.hasStarted,
@@ -70,15 +91,10 @@ fun MainApp() {
                     vm.requestNewGame()
                     navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
                 },
-                onExit = { /* 由 Activity 处 */ },
-                onTestMode = {  // [DEBUG] 发布前删除
-                    vm.startTestMode()
-                    navController.navigateSafe(Route.TOWN) { popUpTo(Route.START) { inclusive = true } }
-                }
+                onExit = { }
             )
         }
 
-        // ── 城镇主界面 ──
         composable(Route.TOWN) {
             LaunchedEffect(Unit) { vm.executePendingNewGame() }
             TownScreen(
@@ -96,7 +112,6 @@ fun MainApp() {
             )
         }
 
-        // ── 城镇建筑 ──
         composable(Route.GUILD) {
             GuildScreen(
                 guildLevel = state.gameState.guild.guildLevel,
@@ -144,7 +159,6 @@ fun MainApp() {
             )
         }
 
-        // ── 名录 / 仓库 / 图鉴 ──
         composable(Route.ROSTER) {
             RosterScreen(
                 heroes = state.heroes,
@@ -155,7 +169,6 @@ fun MainApp() {
 
         composable(Route.HERO_DETAIL) { backStackEntry ->
             val heroId = backStackEntry.arguments?.getString("heroId") ?: return@composable
-            // 已招募 + 酒馆待招募 都能查看详情
             val hero = state.heroes.find { it.id == heroId }
                 ?: state.recruitableHeroes.find { it.id == heroId }
                 ?: return@composable
@@ -173,8 +186,7 @@ fun MainApp() {
                 meetsRequirements = { h, i -> vm.meetsRequirements(h, i) },
                 onAllocateStat = { stat -> vm.allocateStatPoint(heroId, stat) },
                 onAllocateHp = { vm.allocateHpPoint(heroId) },
-                onAllocateMp = { vm.allocateMpPoint(heroId) },
-                onDebugAddProficiency = { if (isRecruited) vm.debugAddProficiency(heroId) }  // [DEBUG] 发布前删除
+                onAllocateMp = { vm.allocateMpPoint(heroId) }
             )
         }
 
@@ -195,7 +207,6 @@ fun MainApp() {
             )
         }
 
-        // ── 地下城 ──
         composable(Route.DUNGEON) {
             DungeonScreen(
                 floor = state.currentFloor,
@@ -203,8 +214,7 @@ fun MainApp() {
                 heroes = state.heroes,
                 deepestFloor = state.gameState.deepestFloorReached,
                 onDepart = { navController.navigateSafe(Route.PARTY_SETUP) },
-                onBack = { navController.popBackStackSafe() },
-                onDebugRefresh = { vm.debugPreviewMap() }  // [DEBUG] 发布前删除
+                onBack = { navController.popBackStackSafe() }
             )
         }
 

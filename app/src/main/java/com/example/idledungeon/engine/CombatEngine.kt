@@ -5,6 +5,7 @@ import com.example.idledungeon.data.MonsterRegistry
 import com.example.idledungeon.data.SpellRegistry
 import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
+import com.example.idledungeon.util.L
 import kotlin.random.Random
 
 /**
@@ -46,8 +47,26 @@ object CombatEngine {
         monsterIds: List<String>,
         carriedItems: List<String> = emptyList()
     ): CombatResult {
+        L.i("Combat", "fight start: heroes=${heroes.size}, monsters=${monsterIds.size} (${monsterIds.joinToString()})")
+        // 边界保护: 任意一方为空时不应该走到这里, 但万一 (例如怪物 ID 全无效) 直接判结束
+        if (heroes.isEmpty()) {
+            L.w("Combat", "fight 被空英雄队调用 — 直接判败")
+            return CombatResult(victory = false, updatedHeroes = emptyList(),
+                log = listOf("=== Battle aborted: empty party / 空队伍, 跳过战斗 ==="),
+                droppedItems = emptyList(), remainingCarriedItems = carriedItems)
+        }
         val log = mutableListOf<String>()
-        val monsters = monsterIds.map { MonsterRegistry.spawn(it) }.toMutableList()
+        val monsters = monsterIds.mapNotNull {
+            try { MonsterRegistry.spawn(it) } catch (e: Exception) {
+                L.w("Combat", "MonsterRegistry 不认识 id='$it', 跳过", e); null
+            }
+        }.toMutableList()
+        if (monsters.isEmpty()) {
+            L.w("Combat", "怪物列表全部失效 — 直接判胜")
+            return CombatResult(victory = true, updatedHeroes = heroes,
+                log = listOf("=== No valid monsters / 无有效怪物 ==="),
+                droppedItems = emptyList(), remainingCarriedItems = carriedItems)
+        }
         val heroStates = heroes.map { it.copy() }.toMutableList()
         val bag = carriedItems.toMutableList()
         /** 英雄眩晕剩余回合数 (heroId → 剩余 N 回合; 每个怪物 STUN 命中加 1, 每个回合开始 -1) */
@@ -238,6 +257,9 @@ object CombatEngine {
         // 记录本场倒下的英雄 (HP <= 0) 与击败的怪物
         val downedIds = heroStates.filter { it.currentHp <= 0 }.map { it.id }.toSet()
         val killedMonsters = monsters.filter { it.currentHp <= 0 }.map { it.id }
+
+        L.i("Combat", "fight end: victory=$victory, rounds=$round, downed=${downedIds.size}, " +
+            "killed=${killedMonsters.size}, drops=${drops.size}")
 
         return CombatResult(
             victory = victory,

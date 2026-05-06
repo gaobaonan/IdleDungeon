@@ -5,6 +5,7 @@ import com.example.idledungeon.data.database.HeroEntity
 import com.example.idledungeon.data.database.SnapshotEntity
 import com.example.idledungeon.model.GameState
 import com.example.idledungeon.model.Hero
+import com.example.idledungeon.util.L
 import com.example.idledungeon.viewmodel.GameUiState
 import com.example.idledungeon.viewmodel.GameViewModel
 
@@ -21,59 +22,91 @@ import com.example.idledungeon.viewmodel.GameViewModel
  */
 class SaveRepository(private val db: GameDatabase) {
 
-    /** 加载存档. 如果还没开始过游戏 (snapshot 表为空) 返回 null */
+    private val tag = "Save"
+
+    /**
+     * 加载存档. 三种返回:
+     *   - null: snapshot 表为空 (从未开始游戏) → ViewModel 用默认 state
+     *   - null: 读库抛异常 (DB 损坏 / Gson 反序列化失败) → 视为"无存档", 让玩家走新游戏入口
+     *   - GameUiState: 正常恢复
+     *
+     * 任何异常都不会向上抛 — 不能因为存档坏了让 App 启动崩溃.
+     */
     suspend fun load(): GameUiState? {
-        val snap = db.snapshotDao().get() ?: return null
-        val heroes = db.heroDao().getAll().map { it.toHero() }
+        return try {
+            val snap = db.snapshotDao().get()
+            if (snap == null) {
+                L.i(tag, "load: snapshot 表为空, 视为新存档")
+                return null
+            }
+            val heroes = db.heroDao().getAll().map { it.toHero() }
+            L.i(tag, "load: 读出 ${heroes.size} 个英雄, 仓库 ${snap.inventoryItemIds.size} 件物品")
 
-        val gameState = GameState(
-            hasStarted = snap.hasStarted,
-            playerName = snap.playerName,
-            playerAvatarUri = snap.playerAvatarUri,
-            guild = snap.guild,
-            deepestFloorReached = snap.deepestFloorReached,
-            mainQuestIndex = snap.mainQuestIndex,
-            roomsExplored = snap.roomsExplored,
-            bossesDefeated = snap.bossesDefeated,
-            foundItemIds = snap.foundItemIds,
-            hasUnreadQuestUpdate = snap.hasUnreadQuestUpdate,
-            monsterKills = snap.monsterKills,
-            lastShopRefreshDayKey = snap.lastShopRefreshDayKey,
-            f2ChestPity = snap.f2ChestPity
-        )
+            val gameState = GameState(
+                hasStarted = snap.hasStarted,
+                playerName = snap.playerName,
+                playerAvatarUri = snap.playerAvatarUri,
+                guild = snap.guild,
+                deepestFloorReached = snap.deepestFloorReached,
+                mainQuestIndex = snap.mainQuestIndex,
+                roomsExplored = snap.roomsExplored,
+                bossesDefeated = snap.bossesDefeated,
+                foundItemIds = snap.foundItemIds,
+                hasUnreadQuestUpdate = snap.hasUnreadQuestUpdate,
+                monsterKills = snap.monsterKills,
+                lastShopRefreshDayKey = snap.lastShopRefreshDayKey,
+                f2ChestPity = snap.f2ChestPity
+            )
 
-        // 仓库道具 ID → 实体 Item; 注册表里查不到的就跳过 (防御性: 万一以后删过物品)
-        val inventory = snap.inventoryItemIds.mapNotNull { id ->
-            runCatching { ItemRegistry.get(id) }.getOrNull()
+            // 仓库道具 ID → 实体 Item; 注册表里查不到的就跳过 (防御性: 万一以后删过物品)
+            val inventory = snap.inventoryItemIds.mapNotNull { id ->
+                val item = runCatching { ItemRegistry.get(id) }.getOrNull()
+                if (item == null) L.w(tag, "load: 仓库物品 ID '$id' 在 ItemRegistry 中不存在, 跳过")
+                item
+            }
+
+            GameUiState(
+                gameState = gameState,
+                heroes = heroes,
+                inventory = inventory,
+                quests = GameViewModel.MAIN_QUESTS,
+                currentFloor = snap.currentFloor,
+                expedition = snap.expedition,
+                partySlots = snap.partySlots,
+                selectedTactic = snap.selectedTactic,
+                selectedSecondaryTactic = snap.selectedSecondaryTactic,
+                carriedItemIds = snap.carriedItemIds,
+                purchasedExtraSupply = snap.purchasedExtraSupply
+                // recruitableHeroes / shopEquipments / shopConsumables 由 ViewModel 加载后调
+                // refreshShops 重建, 不在此处设置
+            )
+        } catch (e: Exception) {
+            L.e(tag, "load: 读取存档失败 — 放弃读取, 走新游戏路径", e)
+            null
         }
-
-        return GameUiState(
-            gameState = gameState,
-            heroes = heroes,
-            inventory = inventory,
-            quests = GameViewModel.MAIN_QUESTS,
-            currentFloor = snap.currentFloor,
-            expedition = snap.expedition,
-            partySlots = snap.partySlots,
-            selectedTactic = snap.selectedTactic,
-            selectedSecondaryTactic = snap.selectedSecondaryTactic,
-            carriedItemIds = snap.carriedItemIds,
-            purchasedExtraSupply = snap.purchasedExtraSupply
-            // recruitableHeroes / shopEquipments / shopConsumables 由 ViewModel 加载后调
-            // refreshShops 重建, 不在此处设置
-        )
     }
 
     /** 写一份完整快照. 英雄表整体替换, snapshot 表 upsert */
     suspend fun save(state: GameUiState) {
-        db.heroDao().replaceAll(state.heroes.map { it.toEntity() })
-        db.snapshotDao().upsert(state.toSnapshot())
+        try {
+            db.heroDao().replaceAll(state.heroes.map { it.toEntity() })
+            db.snapshotDao().upsert(state.toSnapshot())
+            L.d(tag, "save: 已落盘 (英雄 ${state.heroes.size}, 仓库 ${state.inventory.size})")
+        } catch (e: Exception) {
+            // 不向上抛 — 自动保存失败不应该崩溃 UI; 下次 state 变化会再次尝试
+            L.e(tag, "save: 写库失败, 已忽略本次", e)
+        }
     }
 
     /** 抹掉所有数据 — 新游戏前调用. */
     suspend fun clear() {
-        db.heroDao().clear()
-        db.snapshotDao().clear()
+        try {
+            db.heroDao().clear()
+            db.snapshotDao().clear()
+            L.i(tag, "clear: 存档已清空")
+        } catch (e: Exception) {
+            L.e(tag, "clear: 清库失败", e)
+        }
     }
 
     // ───────────────────────────────────────

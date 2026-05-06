@@ -42,7 +42,7 @@ object DungeonGenerator {
         // ── 入口 ──
         val ex = entryX.coerceIn(MARGIN + 2, width - MARGIN - 3)
         val ey = entryY.coerceIn(MARGIN + 2, height - MARGIN - 3)
-        grid[ey][ex] = DungeonNode(NodeType.CORRIDOR, label = "0")
+        grid[ey][ex] = DungeonNode(NodeType.CORRIDOR, roomNumber = 0)
         rooms.add(RoomNode(ex, ey, 0))
 
         // ── 生长循环 ──
@@ -137,7 +137,7 @@ object DungeonGenerator {
             for (i in 1 until len) grid[sy + dy * i][sx + dx * i] = DungeonNode(NodeType.CORRIDOR)
             val rx = sx + dx * len; val ry = sy + dy * len
             val roomGen = rooms.size
-            grid[ry][rx] = DungeonNode(NodeType.CORRIDOR, label = roomGen.toString())
+            grid[ry][rx] = DungeonNode(NodeType.CORRIDOR, roomNumber = roomGen)
             rooms.add(RoomNode(rx, ry, roomGen))
             return true
         }
@@ -168,7 +168,7 @@ object DungeonGenerator {
                 for (i in 1 until len2) grid[ty + dy2 * i][tx + dx2 * i] = DungeonNode(NodeType.CORRIDOR)
                 val rx = tx + dx2 * len2; val ry = ty + dy2 * len2
                 val roomGen = rooms.size
-                grid[ry][rx] = DungeonNode(NodeType.CORRIDOR, label = roomGen.toString())
+                grid[ry][rx] = DungeonNode(NodeType.CORRIDOR, roomNumber = roomGen)
 
                 corners.add(Corner(tx, ty))
                 rooms.add(RoomNode(rx, ry, roomGen))

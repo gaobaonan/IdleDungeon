@@ -49,8 +49,7 @@ fun HeroDetailScreen(
     meetsRequirements: (Hero, Item) -> Boolean,
     onAllocateStat: (StatType) -> Unit = {},
     onAllocateHp: () -> Unit = {},
-    onAllocateMp: () -> Unit = {},
-    onDebugAddProficiency: (() -> Unit)? = null  // [DEBUG] 发布前删除
+    onAllocateMp: () -> Unit = {}
 ) {
     var selectedSlot by remember { mutableStateOf<EquipSlot?>(null) }
     var renameDialogOpen by remember { mutableStateOf(false) }
@@ -272,30 +271,13 @@ fun HeroDetailScreen(
             }
 
             // ── 熟练度 ──
-            if (hero.proficiencyXp.isNotEmpty() || onDebugAddProficiency != null) {
+            if (hero.proficiencyXp.isNotEmpty()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Proficiency / 熟练度", style = MaterialTheme.typography.titleSmall)
-                            if (onDebugAddProficiency != null) {
-                                TextButton(onClick = onDebugAddProficiency) {
-                                    Text("[DEBUG] +50 XP", style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
-                        }
+                        Text("Proficiency / 熟练度", style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(4.dp))
-                        if (hero.proficiencyXp.isEmpty()) {
-                            Text("No proficiency yet / 暂无熟练度",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            hero.proficiencyXp.forEach { (type, xp) ->
-                                ProficiencyRow(type, xp, hero.proficiencyLevel(type))
-                            }
+                        hero.proficiencyXp.forEach { (type, xp) ->
+                            ProficiencyRow(type, xp, hero.proficiencyLevel(type))
                         }
                     }
                 }

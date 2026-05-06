@@ -19,8 +19,7 @@ fun StartScreen(
     hasExistingSave: Boolean,
     onContinue: () -> Unit,
     onNewGame: () -> Unit,
-    onExit: () -> Unit,
-    onTestMode: (() -> Unit)? = null   // [DEBUG] 发布前删除
+    onExit: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -56,16 +55,5 @@ fun StartScreen(
         Spacer(Modifier.height(12.dp))
 
         TextButton(onClick = onExit) { Text("Exit / 退出") }
-
-        if (onTestMode != null) {
-            Spacer(Modifier.height(24.dp))
-            Button(
-                onClick = onTestMode,
-                modifier = Modifier.width(200.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiary
-                )
-            ) { Text("[DEBUG] 测试模式") }
-        }
     }
 }

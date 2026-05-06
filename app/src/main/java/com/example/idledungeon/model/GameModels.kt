@@ -456,8 +456,18 @@ data class DungeonNode(
     val monsterIds: List<String> = emptyList(),
     val lootTable: Map<String, Int> = emptyMap(),
     val explored: Boolean = false,
-    val label: String = ""              // [DEBUG] 房间编号，发布前删除
-)
+    /** 房间编号 (走廊为 null). 用于 BFS / 视野 / 区分房间格. */
+    val roomNumber: Int? = null,
+    /** 是否已被队伍踩过. 用于地图渲染高亮已访问房间 + BFS 不重复探索. */
+    val visited: Boolean = false
+) {
+    /** 该格子是否承载一个房间 (有编号或是 Boss 房 / 楼梯) */
+    val isRoom: Boolean get() =
+        roomNumber != null
+            || type == NodeType.BOSS_ROOM
+            || event == NodeEvent.STAIRS_DOWN
+            || event == NodeEvent.STAIRS_UP
+}
 
 /** 地牢楼层 - 一层 = 一个二维网格 */
 data class DungeonFloor(

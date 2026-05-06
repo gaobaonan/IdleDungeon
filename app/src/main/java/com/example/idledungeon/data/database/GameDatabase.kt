@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import com.example.idledungeon.util.L
 
 /**
  * 全局唯一数据库. App.onCreate 时通过 [getInstance] 创建一次, 后续直接复用.
@@ -34,10 +35,13 @@ abstract class GameDatabase : RoomDatabase() {
                     GameDatabase::class.java,
                     "idle_dungeon.db"
                 )
-                    // 毕设阶段 schema 还会改; 不写 Migration, 直接重建
+                    // 毁掉旧库的回调: 仅当 fallbackToDestructiveMigration 触发时调用
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
-                    .also { INSTANCE = it }
+                    .also {
+                        INSTANCE = it
+                        L.i("DB", "GameDatabase 实例已创建 (path=idle_dungeon.db, version=1)")
+                    }
             }
         }
     }

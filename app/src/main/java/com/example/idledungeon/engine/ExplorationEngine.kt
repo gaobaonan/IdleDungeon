@@ -7,6 +7,7 @@ import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
 import com.example.idledungeon.notification.ExpeditionEvent
 import com.example.idledungeon.notification.ExpeditionEventBus
+import com.example.idledungeon.util.L
 import com.example.idledungeon.viewmodel.advanceQuestsIfNeeded
 import com.example.idledungeon.viewmodel.GameUiState
 import kotlinx.coroutines.delay
@@ -39,16 +40,22 @@ class ExplorationEngine {
     suspend fun run(session: ExpeditionSession, stateFlow: MutableStateFlow<GameUiState>) {
         visitedRooms.clear()
         val state = stateFlow.value
+        L.i("Expedition", "启动 — party=${session.party.size}人, supply=${session.currentSupply}, " +
+            "tactic=${session.tactic}/${session.secondaryTactic}, carried=${session.carriedItems.size}件")
 
         // 优先复用上次冒险保留的地图; 没有则按 session.currentLayer 生成 (一般是 1)
         val savedFloor = state.currentFloor
-        var currentFloor = savedFloor ?: DungeonGenerator.generate(session.currentLayer)
+        var currentFloor = savedFloor ?: run {
+            L.i("Expedition", "生成新地图 layer=${session.currentLayer}")
+            DungeonGenerator.generate(session.currentLayer)
+        }
         val layer = currentFloor.layer  // 实际楼层以地图为准, 而非 session
         val startPos = findStairsUp(currentFloor)
         visitedRooms.add(startPos)
         currentFloor = revealVisibility(currentFloor, startPos.first, startPos.second)
 
         val resumed = savedFloor != null
+        if (resumed) L.i("Expedition", "复用上次保留的地图 layer=$layer, 起点=$startPos")
         val openingLog = if (resumed)
             "== Floor $layer / 回到第${layer}层, 继续探索 =="
         else
@@ -91,9 +98,9 @@ class ExplorationEngine {
             val (nx, ny) = next
             val node = currentFloor.grid[ny][nx]
 
-            val isRoom = isRoomNode(node)
+            val isRoom = node.isRoom
             // 在 markVisited 之前判定: 是否首次进入此房间
-            val firstEntry = isRoom && !node.label.startsWith("v")
+            val firstEntry = isRoom && !node.visited
             if (isRoom) visitedRooms.add(nx to ny)
 
             // 主线任务: 累计探索房间数 (跨多次冒险) — 仅首次进入计数
@@ -112,12 +119,11 @@ class ExplorationEngine {
             }
 
             // 房间名称
-            val roomLabel = node.label.removePrefix("v")
             val roomName = when {
                 node.type == NodeType.BOSS_ROOM -> "Boss Room / Boss房"
                 node.event == NodeEvent.STAIRS_DOWN -> "Stairs / 楼梯间"
                 node.event == NodeEvent.STAIRS_UP -> "Entry / 入口"
-                roomLabel.isNotEmpty() -> "Room $roomLabel / 房间$roomLabel"
+                node.roomNumber != null -> "Room ${node.roomNumber} / 房间${node.roomNumber}"
                 else -> ""
             }
 
@@ -294,6 +300,7 @@ class ExplorationEngine {
                                 val bossName = node.monsterIds.firstOrNull()?.let {
                                     try { MonsterRegistry.spawn(it).name } catch (_: Exception) { it }
                                 } ?: "Boss"
+                                L.i("Expedition", "Boss 击败! layer=${s.currentLayer}, name=$bossName")
                                 ExpeditionEventBus.emit(ExpeditionEvent.BossDefeated(bossName, s.currentLayer))
                                 // 主线任务: 记录该层 Boss 已击败
                                 val defeatedLayer = s.currentLayer
@@ -316,6 +323,7 @@ class ExplorationEngine {
                         supplyCost = SUPPLY_STEP
                         log.add(""); log.add("$header >> STAIRS DOWN / 发现下行楼梯！")
                         val newLayer = s.currentLayer + 1
+                        L.i("Expedition", "下楼: layer ${s.currentLayer} → $newLayer (生成新地图)")
                         currentFloor = DungeonGenerator.generate(newLayer, entryX = nx, entryY = ny)
                         visitedRooms.clear()
                         val newStart = findStairsUp(currentFloor)
@@ -375,6 +383,8 @@ class ExplorationEngine {
 
         // ── 探索结束 ──
         if (s.isExploring) s = s.copy(isExploring = false)
+        L.i("Expedition", "探索结束: reason=${retreatReason ?: "正常结束"}, layer=${s.currentLayer}, " +
+            "loot=${s.backpack.size}件, downedHeroes=${s.downedHeroIds.size}人")
         // 后台事件: 撤退/探索结束
         ExpeditionEventBus.emit(ExpeditionEvent.Retreated(retreatReason ?: "探索结束"))
         s = s.appendLog("")
@@ -655,8 +665,8 @@ class ExplorationEngine {
             if (x != cx || y != cy) {
                 val node = floor.grid[y][x]
 
-                // 未探索房间 (label 非空, 没有 "v" 前缀, 不是 Boss/楼梯)
-                val isUnexploredRoom = node.label.isNotEmpty() && !node.label.startsWith("v")
+                // 未探索房间 (有编号且未访问过, 不是 Boss/楼梯)
+                val isUnexploredRoom = node.roomNumber != null && !node.visited
                     && node.type == NodeType.CORRIDOR
                     && node.event != NodeEvent.BOSS_FIGHT && node.event != NodeEvent.STAIRS_DOWN
 
@@ -739,7 +749,7 @@ class ExplorationEngine {
                 val node = floor.grid[ny][nx]
                 visible.add(nx to ny)
                 if (node.type == NodeType.WALL || node.type == NodeType.BOSS_ROOM) break
-                if (node.type == NodeType.CORRIDOR && node.label.isNotEmpty()) break
+                if (node.type == NodeType.CORRIDOR && node.roomNumber != null) break
                 i++
             }
         }
@@ -761,20 +771,14 @@ class ExplorationEngine {
     // Helpers
     // ============================
 
-    private fun isRoomNode(node: DungeonNode): Boolean =
-        (node.label.isNotEmpty() && node.type == NodeType.CORRIDOR)
-            || node.type == NodeType.BOSS_ROOM
-            || node.event == NodeEvent.STAIRS_DOWN
-            || node.event == NodeEvent.STAIRS_UP
-
     private fun markVisited(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
         floor.copy(grid = floor.grid.mapIndexed { gy, row ->
-            row.mapIndexed { gx, n -> if (gx == x && gy == y && !n.label.startsWith("v")) n.copy(label = "v" + n.label) else n }
+            row.mapIndexed { gx, n -> if (gx == x && gy == y && !n.visited) n.copy(visited = true) else n }
         })
 
     private fun unmarkVisited(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
         floor.copy(grid = floor.grid.mapIndexed { gy, row ->
-            row.mapIndexed { gx, n -> if (gx == x && gy == y && n.label.startsWith("v")) n.copy(label = n.label.removePrefix("v")) else n }
+            row.mapIndexed { gx, n -> if (gx == x && gy == y && n.visited) n.copy(visited = false) else n }
         })
 
     private fun clearEvent(floor: DungeonFloor, x: Int, y: Int): DungeonFloor =
