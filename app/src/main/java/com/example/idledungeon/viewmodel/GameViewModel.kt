@@ -312,6 +312,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── 城镇经营 ─────────────────────────────────────────
 
+    //常规升级
     fun invest(building: String) {
         val guild = _uiState.value.gameState.guild                          // .value 是 StateFlow 当前快照
         val cost = getInvestCost(building)
@@ -322,14 +323,16 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
         // when 是 Kotlin 的 switch 升级版: 可以写复合分支, 各分支独立判定+提示.
         when (building) {
-            "guild" -> { toast("VM", "公会等级只能通过完成主线任务提升, 不可手动投资"); return }
+            "guild" -> { toast("VM", "升级公会？你怎么点进来的？？？"); return }
             "tavern" -> if (guild.tavernLevel >= 10) {
                 toast("VM", "酒馆已满级 (10 级)"); return
             }
             "item_shop" -> if (guild.itemShopLevel >= 5) {
                 toast("VM", "道具店已满级 (5 级)"); return
             }
-            "blacksmith" -> { /* 暂无封顶 */ }
+            "blacksmith" -> if (guild.blacksmithLevel >= 5) {
+                toast("VM", "铁匠铺已满级 (5 级)"); return
+            }
             else -> { L.w("VM", "invest: 未知建筑 '$building'"); return }
         }
 
@@ -370,10 +373,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // YYYYMMDD 格式日期键, 不依赖 java.time, 兼容老 Android 版本.
-    private fun currentDayKey(): Int {
+    private fun currentDayKey(): Int {                                      //获取当前时间的函数
         val cal = java.util.Calendar.getInstance()
         return cal.get(java.util.Calendar.YEAR) * 10000 +
-            (cal.get(java.util.Calendar.MONTH) + 1) * 100 +                 // MONTH 是 0-11, 要 +1
+            (cal.get(java.util.Calendar.MONTH) + 1) * 100 +                 //666
             cal.get(java.util.Calendar.DAY_OF_MONTH)
     }
 
@@ -395,12 +398,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         // List(n) { i -> ... }: 创建长度为 n 的列表, lambda 给每个下标 i 生成元素.
         return List(count) { i ->
             val heroClass = HeroClass.entries.random()                      // .entries 是枚举所有值的 List, 随机抽一个
-            val level = (1..tavernLevel * 3).random()                       // 等级范围跟酒馆等级挂钩
-            val baseHp = 50 + level * 10
+            val level = (1..tavernLevel).random()                       // 等级范围跟酒馆等级挂钩
 
-            // 主属性 (8~14+level), 副属性 (2~5+level/2). 用嵌套函数让下面 mapOf 调用清爽.
-            fun primary() = (8..14 + level).random()
-            fun secondary() = (2..5 + level / 2).random()
+            // 主属性 (5~11+level*3), 副属性 (2~5+level). 用嵌套函数让下面 mapOf 调用清爽.
+            fun primary() = (5..11 + level*3).random()
+            fun secondary() = (2..5 + level).random()
 
             // 按职业决定主/副属性是哪一项. mapOf 创建只读 Map.
             val stats = when (heroClass) {
@@ -422,6 +424,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
 
+            val baseHp = 50 + level * 10 + stats[StatType.STR]!! * 5
             val spells = SpellRegistry.computeSpells(stats, level, heroClass)
             val initial = Hero(
                 id = "recruit_$i",
@@ -886,7 +889,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
  * 默认值都给空, 这样 new 一个 GameUiState() 就是"空白存档".
  */
 data class GameUiState(
-    val gameState: GameState = GameState(),
+    val gameState: GameState = GameState(),                                 //数据
 
     // 英雄
     val heroes: List<Hero> = emptyList(),                                   // 已招募的
