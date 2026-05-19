@@ -31,14 +31,14 @@ fun BlacksmithScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Blacksmith / 铁匠铺  Lv.$shopLevel") },
+                title = { Text("Blacksmith  Lv.$shopLevel") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    TextButton(onClick = onInvest) { Text("Invest / 投资") }
+                    TextButton(onClick = onInvest) { Text("Invest") }
                 }
             )
         }
@@ -49,13 +49,13 @@ fun BlacksmithScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Text("Gold / 金币: ${gold} G",
+                Text("Gold: ${gold} G",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp))
             }
             if (availableItems.isEmpty()) {
                 item {
-                    Text("Sold out / 已售罄 — 明日 0 点自动刷新",
+                    Text("Sold out — restocks at midnight",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 24.dp))
                 }

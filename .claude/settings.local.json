@@ -15,7 +15,28 @@
       "Bash(tasklist.exe *)",
       "Bash(taskkill.exe //F //PID 19012)",
       "Bash(./gradlew lint *)",
-      "Bash(./gradlew assembleDebug --quiet)"
+      "Bash(./gradlew assembleDebug --quiet)",
+      "Bash(./gradlew :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.CombatEngineTest\")",
+      "Bash(dir app\\\\src\\\\test\\\\java\\\\com\\\\example\\\\idledungeon\\\\engine)",
+      "PowerShell(.\\\\gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.CombatEngineTest\" --console=plain 2>&1 | Select-Object -Last 100)",
+      "PowerShell(.\\\\gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.CombatEngineTest\" --rerun-tasks --console=plain 2>&1 | Select-Object -Last 60)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(.\\\\gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.DungeonGeneratorTest\" --console=plain 2>&1 | Select-Object -Last 50)",
+      "PowerShell(.\\\\gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.ExplorationEngineTest\" --console=plain 2>&1 | Select-Object -Last 80)",
+      "PowerShell(.\\\\gradlew.bat :app:testDebugUnitTest --console=plain 2>&1 | Select-Object -Last 15)",
+      "PowerShell(.\\\\gradlew.bat :app:compileDebugKotlin :app:testDebugUnitTest --console=plain 2>&1 | Select-Object -Last 30)",
+      "PowerShell(.\\\\gradlew.bat :app:compileDebugKotlin :app:testDebugUnitTest --console=plain 2>&1 | Select-Object -Last 40)",
+      "PowerShell(.\\\\gradlew.bat :app:compileDebugKotlin :app:testDebugUnitTest --console=plain 2>&1 | Select-Object -Last 15)",
+      "Bash(git --no-pager diff --stat HEAD)",
+      "Bash(xargs wc -l)",
+      "PowerShell(.\\\\gradlew.bat compileDebugKotlin -q --console=plain 2>&1 | Select-Object -Last 40)",
+      "Bash(git mv *)",
+      "Bash(./gradlew.bat compileDebugKotlin -q)",
+      "Bash(./gradlew.bat compileDebugKotlin testDebugUnitTest -q)",
+      "Bash(awk -F'\"' '{t+=$2} END{print \"total tests=\"t}')",
+      "Bash(awk -F'\"' '{f+=$2} END{print \"failures=\"f}')",
+      "Bash(awk -F'\"' '{e+=$2} END{print \"errors=\"e}')"
     ]
   }
 }

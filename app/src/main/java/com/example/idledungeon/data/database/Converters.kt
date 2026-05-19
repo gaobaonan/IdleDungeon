@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.example.idledungeon.model.DungeonFloor
 import com.example.idledungeon.model.EquipSlot
 import com.example.idledungeon.model.ExpeditionSession
+import com.example.idledungeon.model.Hero
 import com.example.idledungeon.model.HeroSpell
 import com.example.idledungeon.model.PartySlot
 import com.example.idledungeon.model.PlayerGuild
@@ -66,7 +67,7 @@ object Converters {
         return gson.fromJson(json, type) ?: emptyMap()
     }
 
-    // ── traits / inventory ids / carried ids: List<String> ──
+    // ── inventory ids / carried ids: List<String> ──
     @TypeConverter
     @JvmStatic
     fun stringListToJson(list: List<String>?): String =
@@ -184,5 +185,20 @@ object Converters {
     fun jsonToExpedition(json: String?): ExpeditionSession? {
         if (json.isNullOrBlank()) return null
         return gson.fromJson(json, ExpeditionSession::class.java)
+    }
+
+    // ── recruitableHeroes: List<Hero> (酒馆候选, 每日刷新一次, 同一天重启要保留) ──
+    // 注: Hero.equipment 是 Map<EquipSlot, Item>; recruitable 默认 equipment=emptyMap, 序列化轻量.
+    @TypeConverter
+    @JvmStatic
+    fun heroListToJson(list: List<Hero>?): String =
+        gson.toJson(list ?: emptyList<Hero>())
+
+    @TypeConverter
+    @JvmStatic
+    fun jsonToHeroList(json: String?): List<Hero> {
+        if (json.isNullOrBlank()) return emptyList()
+        val type = object : TypeToken<List<Hero>>() {}.type
+        return gson.fromJson(json, type) ?: emptyList()
     }
 }

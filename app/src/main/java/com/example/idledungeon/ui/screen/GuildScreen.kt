@@ -23,7 +23,7 @@ import com.example.idledungeon.model.QuestType
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GuildScreen(
-    guildLevel: Int,
+    guildRank: Int,
     quests: List<Quest>,
     currentQuestIndex: Int,
     roomsExplored: Int,
@@ -35,7 +35,7 @@ fun GuildScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Guild / 公会  Lv.$guildLevel") },
+                title = { Text("Guild  Lv.$guildRank") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -48,9 +48,9 @@ fun GuildScreen(
             // 公会状态
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Level / 等级: $guildLevel", style = MaterialTheme.typography.titleMedium)
+                    Text("Level: $guildRank", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "完成主线任务自动升级",
+                        "Levels up automatically as you complete main quests",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -58,7 +58,7 @@ fun GuildScreen(
             }
 
             Spacer(Modifier.height(16.dp))
-            Text("Main Quests / 主线任务", style = MaterialTheme.typography.titleMedium)
+            Text("Main Quests", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -73,7 +73,7 @@ fun GuildScreen(
                 if (currentQuestIndex >= quests.size) {
                     item {
                         Text(
-                            "★ 主线全部完成 ★",
+                            "★ All Main Quests Complete ★",
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 12.dp)
@@ -132,21 +132,21 @@ private fun QuestCard(
                             modifier = Modifier.fillMaxWidth().height(6.dp)
                         )
                         Text(
-                            "进度: $roomsExplored / ${quest.targetCount} 房间",
+                            "Progress: $roomsExplored / ${quest.targetCount} rooms",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     QuestType.DEFEAT_BOSS -> {
                         Text(
-                            "进度: 前往第 ${quest.targetFloor} 层击败 Boss",
+                            "Progress: Reach floor ${quest.targetFloor} and defeat the Boss",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     QuestType.FIND_ITEM -> {
                         Text(
-                            "进度: 在地下城中获得指定物品",
+                            "Progress: Find the target item in the dungeon",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )

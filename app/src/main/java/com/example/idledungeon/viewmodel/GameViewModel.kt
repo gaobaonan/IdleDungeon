@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.SaveRepository
 import com.example.idledungeon.data.SpellRegistry
-import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.data.database.GameDatabase
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -165,7 +163,7 @@ import kotlinx.coroutines.launch
  *   GameUiState              整个 UI 状态聚合 (data class), 见文件底部.
  *   GameState                持久化部分: 玩家名 / 公会 / 任务进度 / 图鉴 / 商店日期键. (model/GameModels.kt)
  *   Hero / Item / Quest / Monster / Spell / Trait     游戏核心数据类型. (model/GameModels.kt)
- *   ItemRegistry / SpellRegistry / TraitRegistry / MonsterRegistry    静态查找表 (object 单例).
+ *   ItemRegistry / SpellRegistry / MonsterRegistry    静态查找表 (object 单例).
  *   SaveRepository           Room 数据库的高层封装. load() / save() / clear().
  *   ExplorationEngine        探险引擎; 协程跑探险算法, 通过 _uiState 推送进度.
  *   L                        我们的 Logger. L.d/i/w/e — Logcat 过滤 "IdleDungeon".
@@ -212,9 +210,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // SaveRepository 是给 Room 数据库套的高层封装. 这里只在 ViewModel 创建时取一次.
     private val saveRepo = SaveRepository(GameDatabase.getInstance(application))
 
-    // @Volatile: 多线程访问的标志位必须加, 防止 CPU 缓存导致看到旧值.
-    @Volatile private var loaded = false                                    // 首次加载完成前不要触发自动保存
-
     // init 块: ViewModel 被 new 出来时立刻执行 (构造函数后).
     init {
         // viewModelScope 是 ViewModel 自带的协程作用域, ViewModel 销毁时它自动取消所有子协程.
@@ -223,18 +218,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             // 守护: 用户可能在 load 完成前就点了"新游戏", _uiState 已被改成新存档. 这里别覆盖回去.
             if (loadedState != null && !_uiState.value.gameState.hasStarted) {
                 _uiState.value = loadedState
-                refreshShops()                                              // 启动后按当天日期重建商店列表
+                // 商店列表已从 snapshot 还原, 不再无条件 refreshShops().
+                // 跨日的刷新由 App.ON_START → checkDailyRefresh() 自然触发.
+                checkDailyRefresh()
             }
-            loaded = true
         }
-        // 自动保存: statstate;e 任何变化 → 去抖动 500ms → 写库.
-        // drop(1) 跳过初始空  debounce 把 500ms 内连续变化合并成一次保存; collect 实际订阅.
+        // 自动保存: state 任何变化 → 去抖动 500ms → 写库.
+        // debounce 把 500ms 内连续变化合并成一次保存; hasStarted 守卫保证初始空 state
+        // (hasStarted=false) 不会被误存 —— 这一条同时也挡掉了 StateFlow 订阅时重放的初始值,
+        // 所以不需要再额外 .drop(1).
         viewModelScope.launch {
             _uiState
-                .drop(1)
                 .debounce(500L)
                 .collect { state ->
-                    if (loaded && state.gameState.hasStarted) {
+                    if (state.gameState.hasStarted) {
                         saveRepo.save(state)
                     }
                 }
@@ -246,28 +243,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         // 5 个主线任务, 顺序触发. 完成一个自动激活下一个.
         val MAIN_QUESTS: List<Quest> = listOf(
             Quest(
-                id = "q1_explore15", title = "初涉地下城",
-                description = "探索 15 个房间",
+                id = "q1_explore15", title = "Into the Dungeon",
+                description = "Explore 15 rooms",
                 type = QuestType.EXPLORE_ROOMS, targetCount = 15
             ),
             Quest(
-                id = "q2_boss1", title = "鼠王讨伐",
-                description = "击败第一层 Boss",
+                id = "q2_boss1", title = "Slay the Rat King",
+                description = "Defeat the Floor 1 Boss",
                 type = QuestType.DEFEAT_BOSS, targetFloor = 1
             ),
             Quest(
-                id = "q3_find_sword", title = "苔纹剑的传说",
-                description = "在第二层的某个守卫宝箱中找到 苔纹剑 (史诗)",
+                id = "q3_find_sword", title = "Legend of the Mossy Blade",
+                description = "Find the Mossy Blade (Epic) in a guarded chest on Floor 2",
                 type = QuestType.FIND_ITEM, targetItemId = QUEST_EPIC_SWORD_ID
             ),
             Quest(
-                id = "q4_boss2", title = "酋长讨伐",
-                description = "击败第二层 Boss",
+                id = "q4_boss2", title = "Slay the Chieftain",
+                description = "Defeat the Floor 2 Boss",
                 type = QuestType.DEFEAT_BOSS, targetFloor = 2
             ),
             Quest(
-                id = "q5_boss3", title = "深渊远征",
-                description = "击败第三层 Boss",
+                id = "q5_boss3", title = "Into the Abyss",
+                description = "Defeat the Floor 3 Boss",
                 type = QuestType.DEFEAT_BOSS, targetFloor = 3
             )
         )
@@ -287,7 +284,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startNewGame() {
-        L.i("VM", "startNewGame: 重置状态为新存档")
+        L.i("VM", "startNewGame: reset state to a fresh save")
         // 不需要显式 clear DB: 后续自动保存会经 heroDao.replaceAll + snapshot upsert REPLACE 整体覆盖.
         // 显式 clear 反而会和 debounced save 形成 clear→save→clear 的竞态.
         // _uiState.update { 旧 -> 新 }: 原子地把 state 替换成 lambda 返回的新值.
@@ -318,22 +315,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val cost = getInvestCost(building)
         // 把所有失败原因前置判断 — 失败时弹 toast, 不进入 update 块.
         if (guild.gold < cost) {
-            toast("VM", "金币不足: 升级 $building 需要 $cost 金, 当前 ${guild.gold}")
+            toast("VM", "Not enough gold: upgrading $building costs $cost, you have ${guild.gold}")
             return
         }
         // when 是 Kotlin 的 switch 升级版: 可以写复合分支, 各分支独立判定+提示.
         when (building) {
-            "guild" -> { toast("VM", "升级公会？你怎么点进来的？？？"); return }
+            "guild" -> { toast("VM", "Upgrade guild? How did you even get here???"); return }
             "tavern" -> if (guild.tavernLevel >= 10) {
-                toast("VM", "酒馆已满级 (10 级)"); return
+                toast("VM", "Tavern is at max level (10)"); return
             }
             "item_shop" -> if (guild.itemShopLevel >= 5) {
-                toast("VM", "道具店已满级 (5 级)"); return
+                toast("VM", "Item shop is at max level (5)"); return
             }
             "blacksmith" -> if (guild.blacksmithLevel >= 5) {
-                toast("VM", "铁匠铺已满级 (5 级)"); return
+                toast("VM", "Blacksmith is at max level (5)"); return
             }
-            else -> { L.w("VM", "invest: 未知建筑 '$building'"); return }
+            else -> { L.w("VM", "invest: unknown building '$building'"); return }
         }
 
         _uiState.update { state ->
@@ -346,13 +343,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             }
             state.copy(gameState = state.gameState.copy(guild = newGuild))
         }
-        L.i("VM", "invest 成功: $building 升级, 花费 $cost")
+        L.i("VM", "invest success: $building upgraded, cost $cost")
         refreshShops()                                                      // 升级后商品池可能变, 立即刷一次
     }
 
     fun getInvestCost(building: String): Int {
         val level = when (building) {
-            "guild" -> _uiState.value.gameState.guild.guildLevel
+            "guild" -> _uiState.value.gameState.guild.guildRank
             "tavern" -> _uiState.value.gameState.guild.tavernLevel
             "blacksmith" -> _uiState.value.gameState.guild.blacksmithLevel
             "item_shop" -> _uiState.value.gameState.guild.itemShopLevel
@@ -380,23 +377,33 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             cal.get(java.util.Calendar.DAY_OF_MONTH)
     }
 
-    // 刷新酒馆招募 + 铁匠铺武器/护甲 + 道具店消耗品, 同时写入今日的 dayKey.
+    // 刷新酒馆招募 + 铁匠铺武器/护甲 + 道具店消耗品, 同时写入今日的 dayKey + 递增招募编号.
     private fun refreshShops() {
         _uiState.update { state ->
             val guild = state.gameState.guild
+            val startNum = state.gameState.nextRecruitNumber
+            val recruits = generateRecruitableHeroes(guild.tavernLevel, startNum)
             state.copy(
-                recruitableHeroes = generateRecruitableHeroes(guild.tavernLevel),
+                recruitableHeroes = recruits,
                 shopEquipments = generateShopItems(guild.blacksmithLevel, ItemType.EQUIPMENT),
                 shopConsumables = generateShopItems(guild.itemShopLevel, ItemType.CONSUMABLE),
-                gameState = state.gameState.copy(lastShopRefreshDayKey = currentDayKey())
+                gameState = state.gameState.copy(
+                    lastShopRefreshDayKey = currentDayKey(),
+                    nextRecruitNumber = startNum + recruits.size
+                )
             )
         }
     }
 
-    private fun generateRecruitableHeroes(tavernLevel: Int): List<Hero> {
+    /**
+     * 生成 N 名候选冒险者. 编号从 [startNumber] 开始累加, 跨刷新保证名字唯一.
+     * 调用方负责把 startNumber + count 写回 GameState.nextRecruitNumber.
+     */
+    private fun generateRecruitableHeroes(tavernLevel: Int, startNumber: Int): List<Hero> {
         val count = 3 + tavernLevel                                         // 酒馆每升一级多 1 个候选
         // List(n) { i -> ... }: 创建长度为 n 的列表, lambda 给每个下标 i 生成元素.
         return List(count) { i ->
+            val recruitNum = startNumber + i                                // 全局递增编号 (用于 id + 名字)
             val heroClass = HeroClass.entries.random()                      // .entries 是枚举所有值的 List, 随机抽一个
             val level = (1..tavernLevel).random()                       // 等级范围跟酒馆等级挂钩
 
@@ -426,19 +433,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
             val baseHp = 50 + level * 10 + stats[StatType.STR]!! * 5
             val spells = SpellRegistry.computeSpells(stats, level, heroClass)
-            val initial = Hero(
-                id = "recruit_$i",
-                name = "Adventurer ${i + 1} / 冒险者${i + 1}",
+            Hero(
+                id = "recruit_$recruitNum",
+                name = "Adventurer $recruitNum",
                 portraitUri = null,
                 heroClass = heroClass, level = level,
                 currentHp = baseHp, maxHp = baseHp,
                 currentMp = 20 + level * 3, maxMp = 20 + level * 3,
                 baseStats = stats, spells = spells
             )
-            // fold: 从 initial 开始, 把每条特质应用上去, 累加 HP/MP 加成. 类似 reduce 但有初始值.
-            TraitRegistry.rollRecruitTraits().fold(initial) { h, tid ->
-                TraitRegistry.applyTrait(h, tid)
-            }
         }
     }
 
@@ -473,8 +476,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun recruitHero(heroId: String) {
         val hero = _uiState.value.recruitableHeroes.find { it.id == heroId }
         if (hero == null) {
-            L.w("VM", "recruitHero: 招募列表里找不到 id=$heroId (可能已被招走或刷新)")
-            toast("VM", "该冒险者已不在招募列表")
+            L.w("VM", "recruitHero: id=$heroId not in recruit list (already recruited or refreshed)")
+            toast("VM", "That adventurer is no longer available")
             return
         }
         _uiState.update { state ->
@@ -485,7 +488,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 recruitableHeroes = state.recruitableHeroes - hero          // List - 元素 = 移除该元素的新 List
             )
         }
-        toast("VM", "已招募 ${hero.name} (Lv.${hero.level} ${hero.heroClass})")
+        toast("VM", "Recruited ${hero.name} (Lv.${hero.level} ${hero.heroClass})")
     }
 
     fun buyItem(itemId: String) {
@@ -494,14 +497,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val item = state.shopEquipments.find { it.id == itemId }
             ?: state.shopConsumables.find { it.id == itemId }
         if (item == null) {
-            L.w("VM", "buyItem: 商店里找不到 id=$itemId")
-            toast("VM", "该商品已不可购买")
+            L.w("VM", "buyItem: id=$itemId not found in shop")
+            toast("VM", "That item is no longer available")
             return
         }
         val cost = item.goldCost
         val guild = state.gameState.guild
         if (guild.gold < cost) {
-            toast("VM", "金币不足: ${item.name} 需要 $cost, 当前 ${guild.gold}")
+            toast("VM", "Not enough gold: ${item.name} costs $cost, you have ${guild.gold}")
             return
         }
         _uiState.update { st ->
@@ -513,8 +516,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 gameState = st.gameState.copy(guild = g.copy(gold = g.gold - cost))
             )
         }
-        L.i("VM", "buyItem: 购入 ${item.name} 花费 $cost")
-        toast("VM", "已购入 ${item.name}")
+        L.i("VM", "buyItem: purchased ${item.name} for $cost")
+        toast("VM", "Purchased ${item.name}")
     }
 
     // ─── 装备管理 ─────────────────────────────────────────
@@ -535,17 +538,13 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun equipItem(heroId: String, item: Item) {
         val state = _uiState.value
         val hero = state.heroes.find { it.id == heroId }
-        if (hero == null) { L.w("VM", "equipItem: 找不到英雄 id=$heroId"); return }
+        if (hero == null) { L.w("VM", "equipItem: hero id=$heroId not found"); return }
         val slot = item.equipSlot
-        if (slot == null) {
-            L.w("VM", "equipItem: 物品 ${item.name} 没有装备槽")
-            toast("VM", "${item.name} 不是装备")
-            return
-        }
+        if (slot == null) { L.w("VM", "equipItem: item ${item.name} has no equip slot"); return }
         if (!meetsRequirements(hero, item)) {
             val classReq = item.weaponType?.requiredClass()
-            val reason = if (classReq != null && classReq != hero.heroClass) "${hero.name} 不是 $classReq, 无法装备 ${item.name}"
-                         else "${hero.name} 属性不足, 无法装备 ${item.name}"
+            val reason = if (classReq != null && classReq != hero.heroClass) "${hero.name} is not a $classReq and cannot equip ${item.name}"
+                         else "${hero.name} does not meet the stat requirements for ${item.name}"
             toast("VM", reason)
             return
         }
@@ -562,7 +561,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
                 inventory = newInventory
             )
         }
-        L.i("VM", "equipItem: ${hero.name} 装上 ${item.name} (槽位 $slot)")
+        L.i("VM", "equipItem: ${hero.name} equipped ${item.name} (slot $slot)")
     }
 
     // 卸下装备: 从英雄身上取下 → 退回仓库.
@@ -570,7 +569,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             val hero = state.heroes.find { it.id == heroId } ?: return@update state
             val item = hero.equipment[slot] ?: return@update state          // 槽位空着没必要做事
-            L.i("VM", "unequipItem: ${hero.name} 卸下 ${item.name} (槽位 $slot)")
+            L.i("VM", "unequipItem: ${hero.name} unequipped ${item.name} (slot $slot)")
             val newHero = hero.copy(equipment = hero.equipment - slot)      // Map - key = 移除该 key 的新 Map
             state.copy(
                 heroes = state.heroes.map { if (it.id == heroId) newHero else it },
@@ -616,12 +615,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun upgradeSpellTier(heroId: String, templateId: String) {
         val hero = _uiState.value.heroes.find { it.id == heroId } ?: return
         val spell = hero.spells.find { it.templateId == templateId }
-        if (spell == null) { L.w("VM", "upgradeSpellTier: 英雄 ${hero.name} 未学习 $templateId"); return }
-        if (hero.unspentSkillPoints < 1) { toast("VM", "技能点不足"); return }
-        if (spell.currentTier >= 4) { toast("VM", "该法术已满阶 (★★★★)"); return }
+        if (spell == null) { L.w("VM", "upgradeSpellTier: ${hero.name} has not learned $templateId"); return }
+        if (hero.unspentSkillPoints < 1) { toast("VM", "Not enough skill points"); return }
+        if (spell.currentTier >= 4) { toast("VM", "This spell is already at max tier (★★★★)"); return }
         val nextTier = spell.currentTier + 1
         val reqLv = HeroSpell.requiredLevel(nextTier)
-        if (hero.level < reqLv) { toast("VM", "升到下一阶需要等级 $reqLv (当前 ${hero.level})"); return }
+        if (hero.level < reqLv) { toast("VM", "Next tier requires level $reqLv (current ${hero.level})"); return }
 
         _uiState.update { state ->
             val h = state.heroes.find { it.id == heroId } ?: return@update state
@@ -631,19 +630,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             val newHero = h.copy(spells = newSpells, unspentSkillPoints = h.unspentSkillPoints - 1)
             state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
         }
-        L.i("VM", "upgradeSpellTier: ${hero.name} 的 $templateId 升至 T$nextTier")
+        L.i("VM", "upgradeSpellTier: ${hero.name}'s $templateId raised to T$nextTier")
     }
 
     // 学习新法术 (需要法师/牧师职业, 跟法术类型匹配, 1 技能点).
     fun learnSpell(heroId: String, templateId: String) {
         val hero = _uiState.value.heroes.find { it.id == heroId } ?: return
-        if (hero.unspentSkillPoints < 1) { toast("VM", "技能点不足"); return }
+        if (hero.unspentSkillPoints < 1) { toast("VM", "Not enough skill points"); return }
         if (hero.spells.any { it.templateId == templateId }) {              // .any { 谓词 }: 至少一个满足就 true
-            toast("VM", "${hero.name} 已学过该法术"); return
+            toast("VM", "${hero.name} already knows this spell"); return
         }
         // try/catch: SpellRegistry.get 找不到 ID 会抛异常, 包起来防止 ViewModel 崩溃.
         val template = try { SpellRegistry.get(templateId) } catch (e: Exception) {
-            L.e("VM", "learnSpell: SpellRegistry 找不到 $templateId", e); return
+            L.e("VM", "learnSpell: SpellRegistry has no $templateId", e); return
         }
         val classOk = when (hero.heroClass) {
             HeroClass.MAGE -> template.type == SpellType.MAGIC
@@ -651,7 +650,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             else -> false                                                    // 战士/游侠不能学法术
         }
         if (!classOk) {
-            toast("VM", "${hero.heroClass} 无法学习此法术 (类型不符)"); return
+            toast("VM", "${hero.heroClass} cannot learn this spell (type mismatch)"); return
         }
         _uiState.update { state ->
             val h = state.heroes.find { it.id == heroId } ?: return@update state
@@ -661,7 +660,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             )
             state.copy(heroes = state.heroes.map { if (it.id == heroId) newHero else it })
         }
-        L.i("VM", "learnSpell: ${hero.name} 学习了 $templateId")
+        L.i("VM", "learnSpell: ${hero.name} learned $templateId")
     }
 
     // 消耗 1 属性点, 加 20 MP.
@@ -722,10 +721,10 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addToParty(heroId: String, position: Position) {
         val state = _uiState.value
-        if (state.partySlots.size >= 4) { toast("VM", "队伍已满 (4 人)"); return }
-        if (state.partySlots.any { it.heroId == heroId }) { toast("VM", "该英雄已在队伍中"); return }
+        if (state.partySlots.size >= 4) { toast("VM", "Party is full (4 max)"); return }
+        if (state.partySlots.any { it.heroId == heroId }) { toast("VM", "This hero is already in the party"); return }
         _uiState.update { it.copy(partySlots = it.partySlots + PartySlot(heroId, position)) }
-        L.i("VM", "addToParty: $heroId 进入队伍 (位置 $position, 当前 ${state.partySlots.size + 1}/4)")
+        L.i("VM", "addToParty: $heroId joined party (position $position, now ${state.partySlots.size + 1}/4)")
     }
 
     fun removeFromParty(heroId: String) {
@@ -734,12 +733,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setTactic(tactic: TacticType) {
-        _uiState.update { it.copy(selectedTactic = tactic) }
+    fun setStrategy(strategy: StrategyType) {
+        _uiState.update { it.copy(selectedStrategy = strategy) }
     }
 
-    fun setSecondaryTactic(tactic: SecondaryTactic) {
-        _uiState.update { it.copy(selectedSecondaryTactic = tactic) }
+    fun setSecondaryStrategy(strategy: SecondaryStrategyType) {
+        _uiState.update { it.copy(selectedSecondaryStrategy = strategy) }
     }
 
     // 携带消耗品: +1 (按 itemId 增加, 可重复携带同种物品).
@@ -748,14 +747,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val current = state.carriedItemIds
         val max = state.gameState.guild.maxCarryItems
         if (current.size >= max) {
-            toast("VM", "携带槽已满 ($max 件), 升级酒馆可扩容")
+            toast("VM", "Carry slots full ($max), upgrade the tavern to expand")
             return
         }
         // 不能超过仓库中该物品的数量 (否则出战时取不出来).
         val ownedCount = state.inventory.count { it.id == itemId }
         val carriedCount = current.count { it == itemId }
         if (carriedCount >= ownedCount) {
-            toast("VM", "仓库里这种物品都已加入携带 ($ownedCount 件)")
+            toast("VM", "All of this item in storage is already carried ($ownedCount)")
             return
         }
         _uiState.update { it.copy(carriedItemIds = it.carriedItemIds + itemId) }
@@ -768,7 +767,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // 花 1 金币加 5 补给到本次出战.
     fun buyExtraSupply() {
         if (_uiState.value.gameState.guild.gold < 1) {
-            toast("VM", "金币不足, 无法购买补给")
+            toast("VM", "Not enough gold to buy supplies")
             return
         }
         _uiState.update { state ->
@@ -806,11 +805,11 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun startExpedition() {
         val state = _uiState.value
         if (state.partySlots.isEmpty()) {
-            toast("VM", "请至少加入 1 名英雄到队伍才能出发")
+            toast("VM", "Add at least 1 hero to the party before departing")
             return
         }
         if (state.expedition?.isExploring == true) {                        // ?.: 链式调用, 中间为 null 整个表达式 null
-            L.w("VM", "startExpedition: 已有探险在跑, 忽略重复点击")
+            L.w("VM", "startExpedition: an expedition is already running, ignoring duplicate tap")
             return
         }
 
@@ -833,8 +832,8 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val session = ExpeditionSession(
             dungeonId = "main_dungeon",
             party = state.partySlots,
-            tactic = state.selectedTactic,
-            secondaryTactic = state.selectedSecondaryTactic,
+            strategy = state.selectedStrategy,
+            secondaryStrategy = state.selectedSecondaryStrategy,
             currentLayer = savedLayer,
             currentSupply = totalSupply,
             maxSupply = totalSupply,
@@ -860,15 +859,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        L.i("VM", "startExpedition: party=${state.partySlots.size}人, supply=$totalSupply, layer=$savedLayer, " +
-            "tactic=${state.selectedTactic}/${state.selectedSecondaryTactic}")
+        L.i("VM", "startExpedition: party=${state.partySlots.size}, supply=$totalSupply, layer=$savedLayer, " +
+            "strategy=${state.selectedStrategy}/${state.selectedSecondaryStrategy}")
         // 启动协程驱动探索 — 包 try/catch 防止引擎崩了让 UI 卡死.
         viewModelScope.launch {
             try {
                 explorationEngine.run(session, _uiState)                    // 阻塞到探险结束
             } catch (e: Exception) {
-                L.e("VM", "ExplorationEngine 抛异常 — 强制结束探险", e)
-                toast("VM", "探险出错, 已强制返回 (详见日志)")
+                L.e("VM", "ExplorationEngine threw — force-ending expedition", e)
+                toast("VM", "Expedition error, forced to return (see logs)")
                 // 让 UI 跳出探险界面 — 把 expedition 标记为已结束, 把 hero 状态从 DEPLOYED 还原.
                 _uiState.update { st ->
                     val ended = st.expedition?.copy(isExploring = false)
@@ -909,8 +908,8 @@ data class GameUiState(
 
     // 编队临时状态 (玩家在战术界面调好的, 出发前不入存档)
     val partySlots: List<PartySlot> = emptyList(),
-    val selectedTactic: TacticType = TacticType.BALANCED,
-    val selectedSecondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
+    val selectedStrategy: StrategyType = StrategyType.BALANCED,
+    val selectedSecondaryStrategy: SecondaryStrategyType = SecondaryStrategyType.EXPLORE,
     val carriedItemIds: List<String> = emptyList(),
     // 出发前在战术界面买的额外补给 (5 补给/1 金币的倍数). 出发后清零.
     val purchasedExtraSupply: Int = 0

@@ -55,7 +55,8 @@ class SaveRepository(private val db: GameDatabase) {
                 hasUnreadQuestUpdate = snap.hasUnreadQuestUpdate,
                 monsterKills = snap.monsterKills,
                 lastShopRefreshDayKey = snap.lastShopRefreshDayKey,
-                f2ChestPity = snap.f2ChestPity
+                f2ChestPity = snap.f2ChestPity,
+                nextRecruitNumber = snap.nextRecruitNumber
             )
 
             // 仓库道具 ID → 实体 Item; 注册表里查不到的就跳过 (防御性: 万一以后删过物品)
@@ -64,21 +65,29 @@ class SaveRepository(private val db: GameDatabase) {
                 if (item == null) L.w(tag, "load: 仓库物品 ID '$id' 在 ItemRegistry 中不存在, 跳过")
                 item
             }
+            // 商店 ID → 实体 Item; 同样防御性跳过失效 ID
+            val shopEquipments = snap.shopEquipmentIds.mapNotNull { id ->
+                runCatching { ItemRegistry.get(id) }.getOrNull()
+            }
+            val shopConsumables = snap.shopConsumableIds.mapNotNull { id ->
+                runCatching { ItemRegistry.get(id) }.getOrNull()
+            }
 
             GameUiState(
                 gameState = gameState,
                 heroes = heroes,
+                recruitableHeroes = snap.recruitableHeroes,
                 inventory = inventory,
+                shopEquipments = shopEquipments,
+                shopConsumables = shopConsumables,
                 quests = GameViewModel.MAIN_QUESTS,
                 currentFloor = snap.currentFloor,
                 expedition = snap.expedition,
                 partySlots = snap.partySlots,
-                selectedTactic = snap.selectedTactic,
-                selectedSecondaryTactic = snap.selectedSecondaryTactic,
+                selectedStrategy = snap.selectedStrategy,
+                selectedSecondaryStrategy = snap.selectedSecondaryStrategy,
                 carriedItemIds = snap.carriedItemIds,
                 purchasedExtraSupply = snap.purchasedExtraSupply
-                // recruitableHeroes / shopEquipments / shopConsumables 由 ViewModel 加载后调
-                // refreshShops 重建, 不在此处设置
             )
         } catch (e: Exception) {
             L.e(tag, "load: 读取存档失败 — 放弃读取, 走新游戏路径", e)
@@ -127,7 +136,6 @@ class SaveRepository(private val db: GameDatabase) {
         baseStats = baseStats,
         unspentStatPoints = unspentStatPoints,
         unspentSkillPoints = unspentSkillPoints,
-        traits = traits,
         spells = spells,
         proficiencyXp = proficiencyXp,
         equipmentIds = equipment.mapValues { it.value.id },
@@ -148,7 +156,6 @@ class SaveRepository(private val db: GameDatabase) {
         baseStats = baseStats,
         unspentStatPoints = unspentStatPoints,
         unspentSkillPoints = unspentSkillPoints,
-        traits = traits,
         spells = spells,
         proficiencyXp = proficiencyXp,
         // 装备 ID → 实例; 注册表丢失时跳过
@@ -173,12 +180,16 @@ class SaveRepository(private val db: GameDatabase) {
         monsterKills = gameState.monsterKills,
         lastShopRefreshDayKey = gameState.lastShopRefreshDayKey,
         f2ChestPity = gameState.f2ChestPity,
+        nextRecruitNumber = gameState.nextRecruitNumber,
         inventoryItemIds = inventory.map { it.id },
         partySlots = partySlots,
-        selectedTactic = selectedTactic,
-        selectedSecondaryTactic = selectedSecondaryTactic,
+        selectedStrategy = selectedStrategy,
+        selectedSecondaryStrategy = selectedSecondaryStrategy,
         carriedItemIds = carriedItemIds,
         purchasedExtraSupply = purchasedExtraSupply,
+        recruitableHeroes = recruitableHeroes,
+        shopEquipmentIds = shopEquipments.map { it.id },
+        shopConsumableIds = shopConsumables.map { it.id },
         currentFloor = currentFloor,
         expedition = expedition
     )

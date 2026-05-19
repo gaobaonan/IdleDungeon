@@ -33,7 +33,7 @@ fun RosterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Roster / 冒险者名录") },
+                title = { Text("Adventurer Roster") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -76,8 +76,8 @@ private fun HeroListCard(hero: Hero, onClick: () -> Unit) {
 @Composable
 private fun StatusChip(status: HeroStatus) {
     val (text, color) = when (status) {
-        HeroStatus.IDLE -> "Idle / 待命" to MaterialTheme.colorScheme.primary
-        HeroStatus.DEPLOYED -> "Deployed / 出征" to MaterialTheme.colorScheme.tertiary
+        HeroStatus.IDLE -> "Idle" to MaterialTheme.colorScheme.primary
+        HeroStatus.DEPLOYED -> "Deployed" to MaterialTheme.colorScheme.tertiary
     }
     Surface(
         color = color.copy(alpha = 0.15f),

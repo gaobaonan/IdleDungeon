@@ -6,9 +6,9 @@ import com.example.idledungeon.model.EquipSlot
 import com.example.idledungeon.model.HeroClass
 import com.example.idledungeon.model.HeroSpell
 import com.example.idledungeon.model.HeroStatus
-import com.example.idledungeon.model.SecondaryTactic
+import com.example.idledungeon.model.SecondaryStrategyType
 import com.example.idledungeon.model.StatType
-import com.example.idledungeon.model.TacticType
+import com.example.idledungeon.model.StrategyType
 import com.example.idledungeon.model.WeaponType
 
 /**
@@ -32,7 +32,6 @@ data class HeroEntity(
     val baseStats: Map<StatType, Int>,
     val unspentStatPoints: Int,
     val unspentSkillPoints: Int,
-    val traits: List<String>,
     val spells: List<HeroSpell>,
     val proficiencyXp: Map<WeaponType, Int>,
     val equipmentIds: Map<EquipSlot, String>,
@@ -43,9 +42,7 @@ data class HeroEntity(
  * 单行存档表 (id 永远为 1) — 装载 GameUiState 中除英雄以外的所有持久化字段.
  *
  * 没存的字段:
- *   - quests:           主线任务模板, 写死在 GameViewModel.MAIN_QUESTS, 启动时挂回
- *   - recruitableHeroes / shopEquipments / shopConsumables:
- *                       每日刷新, 由 lastShopRefreshDayKey 派生
+ *   - quests: 主线任务模板, 写死在 GameViewModel.MAIN_QUESTS, 启动时挂回
  *
  * currentFloor / expedition 可空 — 未在远征中时存 NULL.
  */
@@ -67,14 +64,20 @@ data class SnapshotEntity(
     val monsterKills: Map<String, Int>,
     val lastShopRefreshDayKey: Int,
     val f2ChestPity: Int,
+    val nextRecruitNumber: Int,
 
     // ── 仓库 / 队伍 / 战术 ──
     val inventoryItemIds: List<String>,
     val partySlots: List<com.example.idledungeon.model.PartySlot>,
-    val selectedTactic: TacticType,
-    val selectedSecondaryTactic: SecondaryTactic,
+    val selectedStrategy: StrategyType,
+    val selectedSecondaryStrategy: SecondaryStrategyType,
     val carriedItemIds: List<String>,
     val purchasedExtraSupply: Int,
+
+    // ── 商店 / 招募 (每日刷新; 持久化以避免重启后同一天的商店内容被打乱) ──
+    val recruitableHeroes: List<com.example.idledungeon.model.Hero>,
+    val shopEquipmentIds: List<String>,
+    val shopConsumableIds: List<String>,
 
     // ── 远征中状态 (可空) ──
     val currentFloor: com.example.idledungeon.model.DungeonFloor?,

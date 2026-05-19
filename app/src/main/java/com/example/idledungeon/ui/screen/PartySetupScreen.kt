@@ -39,7 +39,7 @@ fun PartySetupScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Party / 队伍编成") },
+                title = { Text("Party Setup") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -52,12 +52,12 @@ fun PartySetupScreen(
                 onClick = onNext,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 enabled = party.isNotEmpty()
-            ) { Text("Next / 下一步") }
+            ) { Text("Next") }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             // ── 前排 ──
-            Text("Front Row / 前排", style = MaterialTheme.typography.titleSmall)
+            Text("Front Row", style = MaterialTheme.typography.titleSmall)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 val frontSlots = party.filter { it.position == Position.FRONT }
                 repeat(2) { i ->
@@ -72,7 +72,7 @@ fun PartySetupScreen(
             Spacer(Modifier.height(8.dp))
 
             // ── 后排 ──
-            Text("Back Row / 后排", style = MaterialTheme.typography.titleSmall)
+            Text("Back Row", style = MaterialTheme.typography.titleSmall)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 val backSlots = party.filter { it.position == Position.BACK }
                 repeat(2) { i ->
@@ -87,7 +87,7 @@ fun PartySetupScreen(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(Modifier.height(8.dp))
-            Text("Available Heroes / 可选冒险者", style = MaterialTheme.typography.titleSmall)
+            Text("Available Heroes", style = MaterialTheme.typography.titleSmall)
 
             // ── 可选列表 ──
             val frontCount = party.count { it.position == Position.FRONT }
@@ -113,14 +113,14 @@ fun PartySetupScreen(
                                 enabled = frontCount < 2,
                                 contentPadding = PaddingValues(horizontal = 8.dp),
                                 modifier = Modifier.height(32.dp)
-                            ) { Text("Front/前排") }
+                            ) { Text("Front") }
                             Spacer(Modifier.width(4.dp))
                             FilledTonalButton(
                                 onClick = { onAddToParty(hero.id, Position.BACK) },
                                 enabled = backCount < 2,
                                 contentPadding = PaddingValues(horizontal = 8.dp),
                                 modifier = Modifier.height(32.dp)
-                            ) { Text("Back/后排") }
+                            ) { Text("Back") }
                         }
                     }
                 }
@@ -148,7 +148,7 @@ private fun PartySlotBox(hero: Hero?, onRemove: () -> Unit) {
                     }
                 }
             } else {
-                Text("Empty\n空位", style = MaterialTheme.typography.labelSmall)
+                Text("Empty", style = MaterialTheme.typography.labelSmall)
             }
         }
     }

@@ -25,14 +25,14 @@ fun WeaponType.requiredClass(): HeroClass? = when (this) {
 
 /** 武器/护甲分类的本地化名称 (用于 UI / 日志) */
 fun WeaponType.displayName(): String = when (this) {
-    WeaponType.SWORD -> "剑"
-    WeaponType.SPEAR -> "矛"
-    WeaponType.DAGGER -> "匕首"
-    WeaponType.STAFF -> "法杖"
-    WeaponType.BOW -> "弓"
-    WeaponType.HOLY_BELL -> "圣铃"
-    WeaponType.HEAVY_ARMOR -> "重甲"
-    WeaponType.LIGHT_ARMOR -> "轻甲"
+    WeaponType.SWORD -> "Sword"
+    WeaponType.SPEAR -> "Spear"
+    WeaponType.DAGGER -> "Dagger"
+    WeaponType.STAFF -> "Staff"
+    WeaponType.BOW -> "Bow"
+    WeaponType.HOLY_BELL -> "Holy Bell"         //魂3的圣铃，牧师专武
+    WeaponType.HEAVY_ARMOR -> "Heavy Armor"
+    WeaponType.LIGHT_ARMOR -> "Light Armor"
 }
 
 /** 装备槽位 */
@@ -44,13 +44,13 @@ enum class ItemType { EQUIPMENT, CONSUMABLE, MATERIAL }
 /** 物品品质 (普通/稀有/罕见/史诗/传说) */
 enum class Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 
-/** 稀有度的中文显示名 */
+/** 稀有度的显示名 */
 fun Rarity.displayName(): String = when (this) {
-    Rarity.COMMON -> "普通"
-    Rarity.UNCOMMON -> "稀有"
-    Rarity.RARE -> "罕见"
-    Rarity.EPIC -> "史诗"
-    Rarity.LEGENDARY -> "传说"
+    Rarity.COMMON -> "Common"
+    Rarity.UNCOMMON -> "Uncommon"
+    Rarity.RARE -> "Rare"
+    Rarity.EPIC -> "Epic"
+    Rarity.LEGENDARY -> "Legendary"
 }
 
 /** 英雄职业 (不限制装备，只提供熟练度加成) */
@@ -63,18 +63,18 @@ enum class HeroStatus { IDLE, DEPLOYED }
 enum class Position { FRONT, BACK }
 
 /** 主战术 (撤退条件) */
-enum class TacticType {
-    SAFE,        // 稳扎稳打: 有人 HP<50% 且无回复手段 → 撤退
-    BALANCED,    // 平衡: 有人 HP<20% 或全队 HP<50% 且无回复手段 → 撤退
-    RISKY,       // 险中求胜: 有人 HP<20% 且无回复手段 → 撤退
-    AGGRESSIVE   // 孤注一掷: 永不撤退
+enum class StrategyType {
+    SAFE,           // 稳扎稳打: 有人 HP<50% 且无回复手段 → 撤退
+    BALANCED,       // 平衡: 有人 HP<20% 或全队 HP<50% 且无回复手段 → 撤退
+    RISKY,          // 险中求胜: 有人 HP<20% 且无回复手段 → 撤退
+    AGGRESSIVE      // 孤注一掷: 永不撤退
 }
 
 /** 副战术 (探索策略) */
-enum class SecondaryTactic {
-    STRATEGY,    // 攻略优先: 正常探索，发现楼梯则优先下楼
-    SCAVENGE,    // 搜刮优先: 避开 Boss/楼梯，全部房间+拐角探索完后才打 Boss
-    BOSS_RUSH    // Boss优先: 发现未击败 Boss 则优先前往
+enum class SecondaryStrategyType {
+    EXPLORE,        // 攻略优先: 正常探索，发现楼梯则优先下楼
+    SCAVENGE,       // 搜刮优先: 避开 Boss/楼梯，全部房间+拐角探索完后才打 Boss
+    BOSS_RUSH       // Boss优先: 发现未击败 Boss 则优先前往
 }
 
 /** 地牢节点类型 */
@@ -119,47 +119,11 @@ enum class SpellTarget {
 }
 
 // ==========================================
-// 2. 特质 / 物品 / 英雄 / 魔法
+// 2. 物品 / 英雄 / 魔法
 // ==========================================
 
 /**
- * 特质模板 - 单级唯一, 每条特质只有一个固定效果
- *
- * 战斗内可触发的字段:
- *   damageDealtMul   - 输出伤害倍率 (1.0 = 不变, 1.25 = +25%)
- *   damageTakenMul   - 受到伤害倍率
- *   evasionChance    - 闪避几率 0-100
- *   critChance       - 暴击几率 0-100
- *   critMultiplier   - 暴击伤害倍率 (默认 2.0)
- *   doubleStrikeChance - 二连击几率
- *   lifestealRatio   - 吸血比例 (0.15 = 造成伤害的 15%)
- *   regenPerTurn     - 每回合 HP 回复 (可负, 表示扣血)
- *
- * 永久属性 (获得时立即结算):
- *   statBonuses / hpBonus / mpBonus
- *
- * 英雄持有的就是 traits: List<String> (templateId 列表)
- */
-data class TraitTemplate(
-    val id: String,
-    val name: String,
-    val description: String,
-    val isPositive: Boolean,
-    val statBonuses: Map<StatType, Int> = emptyMap(),
-    val hpBonus: Int = 0,
-    val mpBonus: Int = 0,
-    val damageDealtMul: Float = 1f,
-    val damageTakenMul: Float = 1f,
-    val evasionChance: Int = 0,
-    val critChance: Int = 0,
-    val critMultiplier: Float = 2.0f,
-    val doubleStrikeChance: Int = 0,
-    val lifestealRatio: Float = 0f,
-    val regenPerTurn: Int = 0
-)
-
-/**
- * 物品与装备 - 魂系属性需求 + 装备等级 + 商店/掉落开关 + 特性
+ * 物品与装备 - 魂系属性需求 + 装备等级 + 商店/掉落开关
  *
  * 数值规则:
  *   - baseValue (ATK/DEF): 武器/护甲专用，由 (equipLevel + 稀有度) 公式生成
@@ -174,55 +138,45 @@ data class Item(
     val rarity: Rarity = Rarity.COMMON,
     val weaponType: WeaponType? = null,
     val equipSlot: EquipSlot? = null,
-    /** 装备等级 1-10，独立于稀有度。也是商店/铁匠铺刷出此装备的最低建筑等级 */
-    val equipLevel: Int = 1,
-    /** 武器=ATK, 护甲=DEF, 其他=0 */
-    val baseValue: Int = 0,
-    val statRequirements: Map<StatType, Int> = emptyMap(),
-    /** 仅饰品使用 */
-    val statBonuses: Map<StatType, Int> = emptyMap(),
-    /** 是否可在商店出售 */
-    val purchasable: Boolean = rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON,
-    /** 是否可在地下城掉落 */
-    val lootable: Boolean = true,
-    /** R.drawable.xxx 资源 ID; 0 表示用 empty 占位 */
-    val iconRes: Int = 0,
-    /** 装备特性 ID 列表，具体效果在战斗引擎里查表 (待设计) */
-    val traits: List<String> = emptyList(),
-    /** 消耗品: 喝下回复 HP 量 (>0 即视为生命药水) */
-    val restoreHp: Int = 0,
-    /** 消耗品: 喝下回复 MP 量 (>0 即视为魔法药水) */
-    val restoreMp: Int = 0
+    val equipLevel: Int = 1,          //装备等级，独立于稀有度
+    val baseValue: Int = 0,           //装备的数值，由 (equipLevel + 稀有度) 公式生成
+    val statRequirements: Map<StatType, Int> = emptyMap(),      //装备的属性需求
+    val statBonuses: Map<StatType, Int> = emptyMap(),           //饰品的属性增益
+    val purchasable: Boolean = rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON,    //能否购买
+    val lootable: Boolean = true,       //是否作为战利品
+    val iconRes: Int = 0,               //资源
+    val restoreHp: Int = 0,                 //消耗品的回血
+    val restoreMp: Int = 0                  //回蓝
 ) {
     init {
-        require(equipLevel in 1..10) { "equipLevel 必须在 1..10 (id=$id, 实际=$equipLevel)" }
+        require(equipLevel in 1..10) { "equipLevel must be in 1..10 (id=$id, actual=$equipLevel)" }
         if (rarity == Rarity.EPIC) require(equipLevel >= 4) {
-            "EPIC 装备至少 4 级 (id=$id, 实际=$equipLevel)"
+            "EPIC equipment requires level >= 4 (id=$id, actual=$equipLevel)"
         }
         if (rarity == Rarity.LEGENDARY) require(equipLevel >= 7) {
-            "LEGENDARY 装备至少 7 级 (id=$id, 实际=$equipLevel)"
+            "LEGENDARY equipment requires level >= 7 (id=$id, actual=$equipLevel)"
         }
     }
 
     /** 购买价 = 等级 × 50 × 稀有度倍率 (消耗品/材料用更小的乘数) */
     val goldCost: Int get() {
-        val mul = when (rarity) {
+        val rarityMultiplier = when (rarity) {
             Rarity.COMMON -> 1.0
             Rarity.UNCOMMON -> 2.0
             Rarity.RARE -> 4.0
             Rarity.EPIC -> 8.0
             Rarity.LEGENDARY -> 16.0
         }
-        val base = when (type) {
+        val baseValue = when (type) {
             ItemType.EQUIPMENT -> 50
             ItemType.CONSUMABLE -> 20
             ItemType.MATERIAL -> 8
         }
-        return (equipLevel * base * mul).toInt()
+        return (equipLevel * baseValue * rarityMultiplier).toInt()
     }
 
     /** 售价 = 购买价的一半 */
-    val sellPrice: Int get() = goldCost / 2
+    val sellPrice: Int get() = goldCost / 2     //半价！
 }
 
 /** 魔法/奇迹的单个阶级 */
@@ -246,7 +200,7 @@ data class SpellTemplate(
 
 /** 英雄已习得的魔法/奇迹实例 */
 data class HeroSpell(
-    val templateId: String,
+    val templateId: String,         //对应 SpellRegistry 的模板 id
     val currentTier: Int = 1  // 1-4
 ) {
     companion object {
@@ -259,7 +213,7 @@ data class HeroSpell(
 data class Hero(
     val id: String,
     val name: String,
-    val portraitUri: String?,
+    val portraitUri: String?,                   //头像 URI, null 用默认图标
     val heroClass: HeroClass,
     val level: Int = 1,
     val exp: Int = 0,
@@ -270,13 +224,11 @@ data class Hero(
     val baseStats: Map<StatType, Int>,          // 四维基础值
     val unspentStatPoints: Int = 0,             // 未分配属性点 (每升级 +5)
     val unspentSkillPoints: Int = 0,            // 未分配技能点 (每升级 +1)
-    /** 持有的特质模板 ID 列表; 唯一不重复 */
-    val traits: List<String> = emptyList(),
-    val spells: List<HeroSpell> = emptyList(),
+    val spells: List<HeroSpell> = emptyList(),  //已习得的法术/奇迹
     /** 累计熟练度经验 (按武器/护甲分类)。等级由 proficiencyLevel() 派生 */
-    val proficiencyXp: Map<WeaponType, Int> = emptyMap(),
-    val equipment: Map<EquipSlot, Item> = emptyMap(),
-    val status: HeroStatus = HeroStatus.IDLE
+    val proficiencyXp: Map<WeaponType, Int> = emptyMap(),       //累计熟练度经验 (按武器/护甲分类)。等级由 proficiencyLevel() 派生
+    val equipment: Map<EquipSlot, Item> = emptyMap(),   //三个槽位的装备
+    val status: HeroStatus = HeroStatus.IDLE    //IDLE 闲置 / DEPLOYED 出战中
 ) {
     val isAlive: Boolean get() = currentHp > 0
 
@@ -291,17 +243,11 @@ data class Hero(
         return lv
     }
 
-    /** 有效属性 = 基础 + 装备加成 + 特质加成 */
+    /** 有效属性 = 基础 + 装备加成 */
     val effectiveStats: Map<StatType, Int> get() {
         val bonuses = mutableMapOf<StatType, Int>()
-        equipment.values.forEach { equip ->
+        equipment.values.forEach { equip ->             //目前暂时无用，以后也许会有用？
             equip.statBonuses.forEach { (stat, v) ->
-                bonuses[stat] = (bonuses[stat] ?: 0) + v
-            }
-        }
-        traits.forEach { tid ->
-            val tmpl = com.example.idledungeon.data.TraitRegistry.get(tid)
-            tmpl.statBonuses.forEach { (stat, v) ->
                 bonuses[stat] = (bonuses[stat] ?: 0) + v
             }
         }
@@ -310,60 +256,10 @@ data class Hero(
         }
     }
 
-    // ===== 特质聚合属性 (战斗引擎读取) =====
-
-    /** 输出伤害倍率, 多条加成累加 (1.0 = 不变) */
-    val damageDealtMul: Float get() {
-        var sum = 1f
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).damageDealtMul - 1f }
-        return sum.coerceAtLeast(0.1f)
-    }
-    /** 受到伤害倍率, 多条加成累加 */
-    val damageTakenMul: Float get() {
-        var sum = 1f
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).damageTakenMul - 1f }
-        return sum.coerceAtLeast(0.1f)
-    }
-    /** 闪避几率 (0-90, 上限防止全闪避) */
-    val evasionChance: Int get() {
-        var sum = 0
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).evasionChance }
-        return sum.coerceIn(0, 90)
-    }
-    /** 暴击几率 (0-90) */
-    val critChance: Int get() {
-        var sum = 0
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).critChance }
-        return sum.coerceIn(0, 90)
-    }
-    /** 暴击倍率 - 取所有触发暴击的特质中最高的, 默认 2.0 */
-    val critMultiplier: Float get() = traits.mapNotNull {
-        val t = com.example.idledungeon.data.TraitRegistry.get(it)
-        if (t.critChance > 0) t.critMultiplier else null
-    }.maxOrNull() ?: 2.0f
-    /** 二连击几率 (0-80) */
-    val doubleStrikeChance: Int get() {
-        var sum = 0
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).doubleStrikeChance }
-        return sum.coerceIn(0, 80)
-    }
-    /** 吸血比例 (累加) */
-    val lifestealRatio: Float get() {
-        var sum = 0f
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).lifestealRatio }
-        return sum.coerceAtLeast(0f)
-    }
-    /** 每回合 HP 变化 (可负, 累加) */
-    val regenPerTurn: Int get() {
-        var sum = 0
-        traits.forEach { sum += com.example.idledungeon.data.TraitRegistry.get(it).regenPerTurn }
-        return sum
-    }
-
     /** 综合攻击力 = 基础属性 + 武器 × (1 + 熟练度加成) */
     val attack: Int get() {
         val es = effectiveStats
-        val str = es[StatType.STR] ?: 0
+        val str = es[StatType.STR] ?: 0         //为什么？
         val dex = es[StatType.DEX] ?: 0
         val weapon = equipment[EquipSlot.WEAPON]
         val weaponPower = weapon?.baseValue ?: 0
@@ -388,7 +284,7 @@ data class Hero(
      * attack/defense 已含装备 + 特质 + 熟练度加成
      */
     val combatPower: Int get() {
-        val base = attack * 10 + defense * 7 + maxMp * 2 + maxHp
+        val basePower = attack * 10 + defense * 7 + maxMp * 2 + maxHp
         val usableSpells = spells.count { hs ->
             val tpl = com.example.idledungeon.data.SpellRegistry.get(hs.templateId)
             when (heroClass) {
@@ -397,8 +293,8 @@ data class Hero(
                 else -> false
             }
         }
-        val mul = 1.0 + usableSpells * 0.2
-        return (base * mul).toInt()
+        val spellBonus = 1.0 + usableSpells * 0.2
+        return (basePower * spellBonus).toInt()
     }
 
     companion object {
@@ -417,7 +313,7 @@ data class Hero(
 data class PlayerGuild(
     val gold: Int = 500,
     val maxCarryItems: Int = 10,         // 探险可携带道具上限
-    val guildLevel: Int = 1,
+    val guildRank: Int = 1,             //公会声望/阶级, 完成主线任务自动 +1
     val tavernLevel: Int = 1,
     val blacksmithLevel: Int = 1,
     val itemShopLevel: Int = 1
@@ -438,9 +334,9 @@ data class Quest(
     val title: String,
     val description: String,
     val type: QuestType,
-    val targetCount: Int = 0,           // EXPLORE_ROOMS
-    val targetFloor: Int = 0,           // DEFEAT_BOSS
-    val targetItemId: String? = null,   // FIND_ITEM
+    val targetCount: Int = 0,           // 为探索房间准备
+    val targetFloor: Int = 0,           // 为boss准备
+    val targetItemId: String? = null,   // 为找item准备
     val isCompleted: Boolean = false
     // 完成奖励仅是公会升级, 不再有金币奖励
 )
@@ -452,10 +348,10 @@ data class Quest(
 /** 地牢节点 - 二维数组中的一个格子 */
 data class DungeonNode(
     val type: NodeType,
-    val event: NodeEvent = NodeEvent.NONE,
-    val monsterIds: List<String> = emptyList(),
-    val lootTable: Map<String, Int> = emptyMap(),
-    val explored: Boolean = false,
+    val event: NodeEvent = NodeEvent.NONE,          //格子上的事件 (战斗/陷阱/楼梯…)
+    val monsterIds: List<String> = emptyList(),     //遭遇/守护战的怪物 id
+    val lootTable: Map<String, Int> = emptyMap(),   //掉落表 itemId→概率(0-100)
+    val explored: Boolean = false,                  //是否已揭开 (战争迷雾)
     /** 房间编号 (走廊为 null). 用于 BFS / 视野 / 区分房间格. */
     val roomNumber: Int? = null,
     /** 是否已被队伍踩过. 用于地图渲染高亮已访问房间 + BFS 不重复探索. */
@@ -474,15 +370,7 @@ data class DungeonFloor(
     val layer: Int,
     val width: Int,
     val height: Int,
-    val grid: List<List<DungeonNode>>   // grid[y][x] 行优先
-)
-
-/** 地牢 */
-data class Dungeon(
-    val id: String,
-    val name: String,
-    val recommendedLevel: Int,
-    val floors: List<DungeonFloor>
+    val grid: List<List<DungeonNode>>   // y x 顺序
 )
 
 // ==========================================
@@ -492,7 +380,7 @@ data class Dungeon(
 /** 队伍槽位 (英雄ID + 前/后排) */
 data class PartySlot(
     val heroId: String,
-    val position: Position
+    val position: Position  //前排 FRONT / 后排 BACK
 )
 
 /** 当前探险状态 - 存放在 ViewModel 中实时演算 */
@@ -502,16 +390,14 @@ data class ExpeditionSession(
     val posX: Int = 0,
     val posY: Int = 0,
     val party: List<PartySlot>,                 // 出战编队 (1-4人)
-    val tactic: TacticType = TacticType.BALANCED,
-    val secondaryTactic: SecondaryTactic = SecondaryTactic.STRATEGY,
-    val currentSupply: Int,
+    val strategy: StrategyType = StrategyType.BALANCED,         //主战术: 何时撤退
+    val secondaryStrategy: SecondaryStrategyType = SecondaryStrategyType.EXPLORE,   //副战术: BFS 目标优先级
+    val currentSupply: Int,                       //剩余补给, 归零自动撤退
     val maxSupply: Int = currentSupply,            // 本次探险起始补给, 用于 UI 显示比例
     val carriedItems: List<String> = emptyList(), // 携带的消耗品ID
     val backpack: List<String> = emptyList(),     // 探索中拾取的战利品ID
     val isExploring: Boolean = false,
-    val combatLog: List<String> = emptyList(),
-    /** 本次冒险中曾倒下 (HP=0) 过的英雄 ID, 用于探索结束时强制赋予负面特质 */
-    val downedHeroIds: Set<String> = emptySet()
+    val combatLog: List<String> = emptyList()     //探索/战斗日志 (UI 显示)
 )
 
 // ==========================================
@@ -523,7 +409,7 @@ data class MonsterSkill(
     val id: String,
     val name: String,
     val description: String,
-    val effectType: SkillEffect,
+    val effectType: SkillEffect,    //HEAVY_STRIKE 重击 / STUN 击晕
     val powerMultiplier: Float,     // 效果倍率 (1.5 = 150%攻击力)
     val triggerChance: Int          // 触发概率 (0-100)
 )
@@ -537,8 +423,8 @@ data class Monster(
     val maxHp: Int,
     val attack: Int,
     val defense: Int,
-    val skills: List<MonsterSkill> = emptyList(),
-    val dropChances: Map<String, Int> = emptyMap()
+    val skills: List<MonsterSkill> = emptyList(),   //怪物技能 (可空)
+    val dropChances: Map<String, Int> = emptyMap()  //掉落表 itemId→概率(0-100)
 ) {
     val isAlive: Boolean get() = currentHp > 0
     /**
@@ -546,9 +432,9 @@ data class Monster(
      * 怪物没有 MP, 按 0 计算
      */
     val combatPower: Int get() {
-        val base = attack * 10 + defense * 7 + maxHp
-        val mul = 1.0 + skills.size * 0.2
-        return (base * mul).toInt()
+        val basePower = attack * 10 + defense * 7 + maxHp
+        val skillBonus = 1.0 + skills.size * 0.2
+        return (basePower * skillBonus).toInt()
     }
     /** 击败后奖励的经验值 */
     val expReward: Int get() = 10 + level * 8
@@ -563,9 +449,9 @@ const val QUEST_EPIC_SWORD_ID = "mossy_blade_sword"
 
 /** 游戏存档顶层状态 (用于序列化 / Room 持久化) */
 data class GameState(
-    val hasStarted: Boolean = false,
+    val hasStarted: Boolean = false,              //是否已开始 (区分新游戏/继续)
     val playerName: String = "Guild Master",
-    val playerAvatarUri: String? = null,
+    val playerAvatarUri: String? = null,          //玩家头像 URI, null 用默认
     val guild: PlayerGuild = PlayerGuild(),
     val deepestFloorReached: Int = 1,
     // ── 主线任务进度 ──
@@ -581,5 +467,11 @@ data class GameState(
     val lastShopRefreshDayKey: Int = 0,
     // ── 主线 Q3 保底 ──
     /** F2 累计开过的守卫宝箱中没掉到苔纹剑的次数; 达到 5 时下个 F2 守卫宝箱必出 */
-    val f2ChestPity: Int = 0
+    val f2ChestPity: Int = 0,
+    // ── 招募者编号 ──
+    /**
+     * 下一个招募者要分配的编号; 每次刷新酒馆按此累加.
+     * 保证"冒险者 N"的名字跨刷新单调递增, 不会回到 1.
+     */
+    val nextRecruitNumber: Int = 1
 )

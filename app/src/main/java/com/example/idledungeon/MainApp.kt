@@ -114,7 +114,7 @@ private fun NavHostBody(
 
         composable(Route.GUILD) {
             GuildScreen(
-                guildLevel = state.gameState.guild.guildLevel,
+                guildRank = state.gameState.guild.guildRank,
                 quests = state.quests,
                 currentQuestIndex = state.gameState.mainQuestIndex,
                 roomsExplored = state.gameState.roomsExplored,
@@ -228,23 +228,23 @@ private fun NavHostBody(
                 allHeroes = state.heroes.associateBy { it.id },
                 onAddToParty = { id, pos -> vm.addToParty(id, pos) },
                 onRemoveFromParty = { vm.removeFromParty(it) },
-                onNext = { navController.navigateSafe(Route.TACTIC_SETUP) },
+                onNext = { navController.navigateSafe(Route.STRATEGY_SETUP) },
                 onBack = { navController.popBackStackSafe() }
             )
         }
 
-        composable(Route.TACTIC_SETUP) {
-            TacticSetupScreen(
-                selectedTactic = state.selectedTactic,
-                selectedSecondaryTactic = state.selectedSecondaryTactic,
+        composable(Route.STRATEGY_SETUP) {
+            StrategySetupScreen(
+                selectedStrategy = state.selectedStrategy,
+                selectedSecondaryStrategy = state.selectedSecondaryStrategy,
                 consumables = state.inventory.filter { it.type == com.example.idledungeon.model.ItemType.CONSUMABLE },
                 carriedItemIds = state.carriedItemIds,
                 maxCarry = state.gameState.guild.maxCarryItems,
                 defaultSupply = state.gameState.guild.defaultExpeditionSupply,
                 purchasedSupply = state.purchasedExtraSupply,
                 gold = state.gameState.guild.gold,
-                onTacticChange = { vm.setTactic(it) },
-                onSecondaryTacticChange = { vm.setSecondaryTactic(it) },
+                onStrategyChange = { vm.setStrategy(it) },
+                onSecondaryStrategyChange = { vm.setSecondaryStrategy(it) },
                 onAddItem = { vm.addCarryItem(it) },
                 onRemoveItem = { vm.removeCarryItem(it) },
                 onBuySupply = { vm.buyExtraSupply() },

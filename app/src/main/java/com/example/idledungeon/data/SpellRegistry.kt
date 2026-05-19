@@ -26,10 +26,10 @@ object SpellRegistry {
             id = "fire", type = SpellType.MAGIC,
             target = SpellTarget.DAMAGE_SINGLE,
             tiers = listOf(
-                SpellTier("火球",     "投掷一颗小火球",           12, 4),
-                SpellTier("大火球",   "更大的火球，威力倍增",      28, 9),
-                SpellTier("火焰射线", "喷射一道灼热的火焰射线",    50, 16),
-                SpellTier("烈焰风暴", "召唤毁灭性的火焰风暴",     80, 26)
+                SpellTier("Fireball",     "Hurl a small fireball",                12, 4),
+                SpellTier("Greater Fireball",   "A larger fireball with doubled power", 28, 9),
+                SpellTier("Flame Ray", "Spray a searing ray of flame",         50, 16),
+                SpellTier("Firestorm", "Summon a devastating storm of fire",   80, 26)
             )
         ),
 
@@ -38,10 +38,10 @@ object SpellRegistry {
             id = "lightning", type = SpellType.MAGIC,
             target = SpellTarget.DAMAGE_SINGLE,
             tiers = listOf(
-                SpellTier("电火花",   "释放微弱的电流",           11, 4),
-                SpellTier("闪电",     "一道精准的闪电劈下",        26, 9),
-                SpellTier("雷暴",     "召唤雷云降下闪电",         48, 16),
-                SpellTier("天罚",     "苍穹之上降下神雷",         85, 28)
+                SpellTier("Spark",   "Release a faint electric current",    11, 4),
+                SpellTier("Lightning",     "A precise bolt of lightning strikes down", 26, 9),
+                SpellTier("Thunderstorm",     "Summon thunderclouds to rain down lightning", 48, 16),
+                SpellTier("Divine Judgment",     "Divine thunder falls from the heavens", 85, 28)
             )
         ),
 
@@ -50,10 +50,10 @@ object SpellRegistry {
             id = "blizzard", type = SpellType.MAGIC,
             target = SpellTarget.DAMAGE_AOE,
             tiers = listOf(
-                SpellTier("冰刺",     "射出尖锐的冰刺",          8,  4),
-                SpellTier("冰锥",     "多根冰锥同时射出",         18, 8),
-                SpellTier("暴风雪",   "在范围内降下暴风雪",       35, 15),
-                SpellTier("绝对零度", "冻结一切的极寒领域",       58, 24)
+                SpellTier("Ice Spike",     "Launch a sharp spike of ice",       8,  4),
+                SpellTier("Ice Shards",     "Fire multiple ice shards at once",  18, 8),
+                SpellTier("Blizzard",   "Bring down a blizzard over the area", 35, 15),
+                SpellTier("Absolute Zero", "A field of extreme cold that freezes everything", 58, 24)
             )
         ),
 
@@ -62,10 +62,10 @@ object SpellRegistry {
             id = "dark_wave", type = SpellType.MAGIC,
             target = SpellTarget.DAMAGE_AOE,
             tiers = listOf(
-                SpellTier("暗影箭",   "一支由暗影凝聚的箭矢",     7,  4),
-                SpellTier("暗影爆发", "暗影能量向外爆裂",         16, 9),
-                SpellTier("暗影领域", "展开吞噬光明的领域",       32, 17),
-                SpellTier("虚无吞噬", "召唤虚空吞噬一切",        55, 30)
+                SpellTier("Shadow Bolt",   "An arrow forged from condensed shadow", 7,  4),
+                SpellTier("Shadow Burst", "Shadow energy bursts outward",       16, 9),
+                SpellTier("Shadow Realm", "Unfold a realm that devours light",  32, 17),
+                SpellTier("Void Devour", "Summon the void to consume all",     55, 30)
             )
         ),
 
@@ -74,10 +74,10 @@ object SpellRegistry {
             id = "mind_sharpen", type = SpellType.MAGIC,
             target = SpellTarget.BUFF_SINGLE, affectedStat = StatType.INT,
             tiers = listOf(
-                SpellTier("灵光",       "微弱的智识之光笼罩目标",   2, 4),
-                SpellTier("智慧之光",   "思维变得异常清晰",         4, 8),
-                SpellTier("大智慧",     "大脑高速运转，洞察一切",   7, 14),
-                SpellTier("全知之眼",   "获得接近全知的瞬间感悟",  10, 22)
+                SpellTier("Insight",       "A faint light of intellect envelops the target", 2, 4),
+                SpellTier("Light of Wisdom",   "Thoughts become extraordinarily clear", 4, 8),
+                SpellTier("Great Wisdom",     "The mind races, perceiving everything", 7, 14),
+                SpellTier("Eye of Omniscience",   "Gain a fleeting near-omniscient revelation", 10, 22)
             )
         ),
 
@@ -86,10 +86,10 @@ object SpellRegistry {
             id = "haste", type = SpellType.MAGIC,
             target = SpellTarget.BUFF_SINGLE, affectedStat = StatType.DEX,
             tiers = listOf(
-                SpellTier("迅捷术",   "目标的动作略微加速",        2, 3),
-                SpellTier("疾风步",   "身形如风般迅捷",           4, 7),
-                SpellTier("闪电反射", "反应速度提升到极限",        6, 12),
-                SpellTier("时间加速", "扭曲时间流速，近乎瞬移",    9, 20)
+                SpellTier("Haste",   "The target's movements slightly quicken", 2, 3),
+                SpellTier("Gale Step",   "Move as swift as the wind",         4, 7),
+                SpellTier("Lightning Reflexes", "Reaction speed pushed to the limit", 6, 12),
+                SpellTier("Time Acceleration", "Warp the flow of time, near-teleportation", 9, 20)
             )
         ),
 
@@ -98,10 +98,10 @@ object SpellRegistry {
             id = "weaken", type = SpellType.MAGIC,
             target = SpellTarget.DEBUFF_SINGLE, affectedStat = StatType.STR,
             tiers = listOf(
-                SpellTier("虚弱术",   "目标感到一阵无力",          2, 4),
-                SpellTier("衰弱术",   "力量被大幅削弱",           4, 8),
-                SpellTier("力竭诅咒", "诅咒侵蚀目标的肌肉",       7, 14),
-                SpellTier("肌肉萎缩", "目标的力量几乎被完全夺走",  10, 22)
+                SpellTier("Weaken",   "The target feels a wave of weakness",  2, 4),
+                SpellTier("Enfeeble",   "Strength is greatly diminished",     4, 8),
+                SpellTier("Curse of Exhaustion", "A curse erodes the target's muscles", 7, 14),
+                SpellTier("Muscle Atrophy", "The target's strength is almost entirely stripped away", 10, 22)
             )
         ),
 
@@ -110,10 +110,10 @@ object SpellRegistry {
             id = "slow", type = SpellType.MAGIC,
             target = SpellTarget.DEBUFF_SINGLE, affectedStat = StatType.DEX,
             tiers = listOf(
-                SpellTier("迟缓术",   "目标的行动变得迟钝",        2, 3),
-                SpellTier("蛛网术",   "黏腻的丝线束缚目标",       4, 7),
-                SpellTier("泥沼",     "脚下化为泥沼寸步难行",      6, 12),
-                SpellTier("时间停滞", "目标被封锁在凝固的时间中",   9, 20)
+                SpellTier("Slow",   "The target's actions become sluggish", 2, 3),
+                SpellTier("Web",   "Sticky strands bind the target",       4, 7),
+                SpellTier("Quagmire",     "The ground turns to mire, halting all movement", 6, 12),
+                SpellTier("Time Stop", "The target is locked in frozen time",  9, 20)
             )
         ),
 
@@ -126,10 +126,10 @@ object SpellRegistry {
             id = "heal", type = SpellType.MIRACLE,
             target = SpellTarget.HEAL_SINGLE,
             tiers = listOf(
-                SpellTier("治愈术",   "温暖的光芒恢复少量生命",    15, 5),
-                SpellTier("中级治愈", "治愈之光更加强烈",          35, 11),
-                SpellTier("高级治愈", "强大的治愈魔法",           60, 18),
-                SpellTier("圣光洗礼", "圣光倾泻，完全恢复目标",   100, 28)
+                SpellTier("Heal",   "A warm light restores a little health", 15, 5),
+                SpellTier("Greater Heal", "The healing light grows stronger",  35, 11),
+                SpellTier("Superior Heal", "Powerful healing magic",           60, 18),
+                SpellTier("Baptism of Light", "Holy light pours down, fully restoring the target", 100, 28)
             )
         ),
 
@@ -138,10 +138,10 @@ object SpellRegistry {
             id = "mass_heal", type = SpellType.MIRACLE,
             target = SpellTarget.HEAL_AOE,
             tiers = listOf(
-                SpellTier("祈祷",     "轻声祈祷，队友获得微弱治愈",  8, 6),
-                SpellTier("群体治愈", "治愈之光覆盖全体队友",       20, 13),
-                SpellTier("圣域之光", "圣光笼罩整个战场",          40, 22),
-                SpellTier("奇迹重生", "奇迹之力使全队满血复活",     70, 35)
+                SpellTier("Prayer",     "A soft prayer grants allies faint healing", 8, 6),
+                SpellTier("Mass Heal", "Healing light covers all allies",     20, 13),
+                SpellTier("Sanctuary Light", "Holy light envelops the entire battlefield", 40, 22),
+                SpellTier("Miracle of Rebirth", "Miraculous power revives the whole party at full health", 70, 35)
             )
         ),
 
@@ -150,10 +150,10 @@ object SpellRegistry {
             id = "smite", type = SpellType.MIRACLE,
             target = SpellTarget.DAMAGE_SINGLE,
             tiers = listOf(
-                SpellTier("圣击",     "以圣光之力打击敌人",        13, 5),
-                SpellTier("制裁之锤", "召唤光之锤击打目标",        30, 10),
-                SpellTier("圣光冲击", "强烈的圣光贯穿目标",        55, 17),
-                SpellTier("天使降临", "召唤天使之力降下审判",       82, 27)
+                SpellTier("Smite",     "Strike the enemy with the power of holy light", 13, 5),
+                SpellTier("Hammer of Justice", "Summon a hammer of light to strike the target", 30, 10),
+                SpellTier("Holy Impact", "Intense holy light pierces the target", 55, 17),
+                SpellTier("Angelic Descent", "Summon angelic power to bring down judgment", 82, 27)
             )
         ),
 
@@ -162,10 +162,10 @@ object SpellRegistry {
             id = "holy_nova", type = SpellType.MIRACLE,
             target = SpellTarget.DAMAGE_AOE,
             tiers = listOf(
-                SpellTier("圣光闪",   "释放一小圈圣光脉冲",        6,  4),
-                SpellTier("圣光爆发", "圣光向四周猛烈扩散",        15, 9),
-                SpellTier("神圣新星", "耀眼的圣光炸裂整个战场",    30, 16),
-                SpellTier("神圣裁决", "以神之名义审判所有不洁之物",  50, 26)
+                SpellTier("Holy Flash",   "Release a small pulse of holy light", 6,  4),
+                SpellTier("Holy Burst", "Holy light spreads violently outward", 15, 9),
+                SpellTier("Holy Nova", "Dazzling holy light erupts across the battlefield", 30, 16),
+                SpellTier("Divine Verdict", "In the name of god, judge all that is impure", 50, 26)
             )
         ),
 
@@ -174,10 +174,10 @@ object SpellRegistry {
             id = "war_blessing", type = SpellType.MIRACLE,
             target = SpellTarget.BUFF_SINGLE, affectedStat = StatType.STR,
             tiers = listOf(
-                SpellTier("力量祝福", "赐予目标微弱的神圣力量",     2, 4),
-                SpellTier("战神之力", "战神的力量灌注目标",         4, 8),
-                SpellTier("巨人之力", "目标获得巨人般的怪力",       7, 14),
-                SpellTier("泰坦之力", "以神之名赐予泰坦伟力",     10, 22)
+                SpellTier("Strength Blessing", "Grant the target faint holy strength", 2, 4),
+                SpellTier("War God's Might", "The war god's power infuses the target", 4, 8),
+                SpellTier("Giant's Strength", "The target gains a giant's monstrous might", 7, 14),
+                SpellTier("Titan's Might", "In the name of god, bestow titanic power", 10, 22)
             )
         ),
 
@@ -186,10 +186,10 @@ object SpellRegistry {
             id = "devotion", type = SpellType.MIRACLE,
             target = SpellTarget.BUFF_SINGLE, affectedStat = StatType.FTH,
             tiers = listOf(
-                SpellTier("祈福",     "增强目标的信仰之心",        2, 3),
-                SpellTier("虔诚之光", "信仰之光照耀目标",          4, 7),
-                SpellTier("圣盾",     "神圣之盾庇佑目标",         6, 12),
-                SpellTier("神圣护甲", "全身被不可侵犯的圣光包裹",  9, 20)
+                SpellTier("Benediction",     "Strengthen the target's faithful heart", 2, 3),
+                SpellTier("Light of Devotion", "The light of faith shines upon the target", 4, 7),
+                SpellTier("Holy Shield",     "A sacred shield protects the target", 6, 12),
+                SpellTier("Divine Armor", "The body is wrapped in inviolable holy light", 9, 20)
             )
         ),
 
@@ -198,10 +198,10 @@ object SpellRegistry {
             id = "silence", type = SpellType.MIRACLE,
             target = SpellTarget.DEBUFF_SINGLE, affectedStat = StatType.INT,
             tiers = listOf(
-                SpellTier("静默",     "目标的思维变得模糊",        2, 4),
-                SpellTier("沉默术",   "封锁目标的魔力回路",       4, 8),
-                SpellTier("心智封印", "目标无法进行任何思考",      6, 13),
-                SpellTier("灵魂禁锢", "将目标的灵魂彻底封印",     9, 20)
+                SpellTier("Quiet",     "The target's thoughts grow hazy",     2, 4),
+                SpellTier("Silence",   "Seal off the target's magic circuits", 4, 8),
+                SpellTier("Mind Seal", "The target can no longer think at all", 6, 13),
+                SpellTier("Soul Imprisonment", "Completely seal away the target's soul", 9, 20)
             )
         ),
 
@@ -210,10 +210,10 @@ object SpellRegistry {
             id = "faithbreak", type = SpellType.MIRACLE,
             target = SpellTarget.DEBUFF_SINGLE, affectedStat = StatType.FTH,
             tiers = listOf(
-                SpellTier("动摇",     "目标信念产生动摇",          2, 3),
-                SpellTier("疑惑之雾", "迷雾笼罩目标的信仰之心",    4, 7),
-                SpellTier("信仰崩塌", "目标的信仰根基被动摇",      6, 12),
-                SpellTier("弃神",     "神之庇佑彻底离开目标",      9, 20)
+                SpellTier("Waver",     "The target's conviction begins to waver", 2, 3),
+                SpellTier("Mist of Doubt", "Fog shrouds the target's faithful heart", 4, 7),
+                SpellTier("Faith Collapse", "The target's foundation of faith is shaken", 6, 12),
+                SpellTier("Godforsaken",     "Divine protection wholly abandons the target", 9, 20)
             )
         )
     ).associateBy { it.id }

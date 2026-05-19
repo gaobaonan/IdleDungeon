@@ -24,7 +24,7 @@ import com.example.idledungeon.util.L
 object NotificationHelper {
 
     const val CHANNEL_ID = "expedition_events"
-    private const val CHANNEL_NAME = "探险事件"
+    private const val CHANNEL_NAME = "Expedition Events"
 
     // 不同事件用不同通知 ID, 避免互相覆盖
     private const val NOTIF_ID_BOSS = 1001
@@ -39,12 +39,12 @@ object NotificationHelper {
                 CHANNEL_ID, CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Boss 战胜 / 上下楼 / 队伍撤退"
+                description = "Boss defeated / floor change / party retreat"
             }
             mgr.createNotificationChannel(channel)
-            L.i("Notif", "通知 channel '$CHANNEL_ID' 已注册")
+            L.i("Notif", "notification channel '$CHANNEL_ID' registered")
         } catch (e: Exception) {
-            L.e("Notif", "注册通知 channel 失败", e)
+            L.e("Notif", "failed to register notification channel", e)
         }
     }
 
@@ -52,23 +52,23 @@ object NotificationHelper {
     @SuppressLint("MissingPermission")  // 权限已在 hasPostPermission 里检查
     fun notify(context: Context, event: ExpeditionEvent) {
         if (!hasPostPermission(context)) {
-            L.w("Notif", "POST_NOTIFICATIONS 权限未授予, 跳过事件: $event")
+            L.w("Notif", "POST_NOTIFICATIONS not granted, skipping event: $event")
             return  // Android 13+ 用户拒绝过就静默跳过
         }
 
         val (title, text, id) = when (event) {
             is ExpeditionEvent.BossDefeated -> Triple(
-                "Boss 击败！",
-                "第 ${event.layer} 层 ${event.bossName} 倒下",
+                "Boss Defeated!",
+                "${event.bossName} fell on floor ${event.layer}",
                 NOTIF_ID_BOSS
             )
             is ExpeditionEvent.FloorChanged -> Triple(
-                "楼层变化",
-                "队伍下到第 ${event.newLayer} 层",
+                "Floor Changed",
+                "Party descended to floor ${event.newLayer}",
                 NOTIF_ID_FLOOR
             )
             is ExpeditionEvent.Retreated -> Triple(
-                "队伍撤退",
+                "Party Retreated",
                 event.reason,
                 NOTIF_ID_RETREAT
             )
@@ -93,9 +93,9 @@ object NotificationHelper {
                 .build()
 
             NotificationManagerCompat.from(context).notify(id, notif)
-            L.i("Notif", "已投递: '$title' — $text (id=$id)")
+            L.i("Notif", "delivered: '$title' — $text (id=$id)")
         } catch (e: Exception) {
-            L.e("Notif", "投递通知失败 (event=$event)", e)
+            L.e("Notif", "failed to deliver notification (event=$event)", e)
         }
     }
 

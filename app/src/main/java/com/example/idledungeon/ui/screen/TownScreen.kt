@@ -49,25 +49,25 @@ fun TownScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 BuildingIcon(
-                    label = "Guild\n公会",
+                    label = "Guild",
                     icon = Icons.Default.AccountBalance,
                     showBadge = guildHasUnreadQuest,
                     onClick = onGuildClick
                 )
-                BuildingIcon("Tavern\n酒馆", Icons.Default.LocalBar, onClick = onTavernClick)
+                BuildingIcon("Tavern", Icons.Default.LocalBar, onClick = onTavernClick)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BuildingIcon("Smith\n铁匠铺", Icons.Default.Build, onClick = onBlacksmithClick)
-                BuildingIcon("Shop\n道具店", Icons.Default.ShoppingCart, onClick = onItemShopClick)
+                BuildingIcon("Smith", Icons.Default.Build, onClick = onBlacksmithClick)
+                BuildingIcon("Shop", Icons.Default.ShoppingCart, onClick = onItemShopClick)
             }
             // 城门
             FilledTonalButton(onClick = onGateClick) {
                 Icon(Icons.Default.MeetingRoom, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Enter Dungeon / 进入地下城")
+                Text("Enter Dungeon")
             }
         }
 
@@ -75,19 +75,19 @@ fun TownScreen(
         NavigationBar {
             NavigationBarItem(
                 icon = { Icon(Icons.Default.People, contentDescription = null) },
-                label = { Text("Roster\n名录") },
+                label = { Text("Roster") },
                 selected = false,
                 onClick = onRosterClick
             )
             NavigationBarItem(
                 icon = { Icon(Icons.Default.Inventory, contentDescription = null) },
-                label = { Text("Items\n仓库") },
+                label = { Text("Items") },
                 selected = false,
                 onClick = onInventoryClick
             )
             NavigationBarItem(
                 icon = { Icon(Icons.Default.MenuBook, contentDescription = null) },
-                label = { Text("Codex\n图鉴") },
+                label = { Text("Codex") },
                 selected = false,
                 onClick = onBestiaryClick
             )

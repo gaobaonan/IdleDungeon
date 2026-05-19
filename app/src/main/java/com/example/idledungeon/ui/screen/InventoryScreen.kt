@@ -33,9 +33,9 @@ fun InventoryScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     val tabs = listOf(
-        "Equipment / 装备" to ItemType.EQUIPMENT,
-        "Consumable / 消耗品" to ItemType.CONSUMABLE,
-        "Material / 材料" to ItemType.MATERIAL
+        "Equipment" to ItemType.EQUIPMENT,
+        "Consumable" to ItemType.CONSUMABLE,
+        "Material" to ItemType.MATERIAL
     )
     val filteredItems = items.filter { it.type == tabs[selectedTab].second }
     // 同 ID 物品堆叠成一格
@@ -44,7 +44,7 @@ fun InventoryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Inventory / 道具仓库  (${items.size})") },
+                title = { Text("Inventory  (${items.size})") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -68,13 +68,13 @@ fun InventoryScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
             Text(
-                "Gold / 金币: $gold G",
+                "Gold: $gold G",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             if (stacks.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Empty / 空", style = MaterialTheme.typography.bodyLarge,
+                    Text("Empty", style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.outline)
                 }
             } else {
@@ -206,7 +206,7 @@ private fun ItemDetailDialog(
                     Column {
                         Text(item.name)
                         if (count > 1) {
-                            Text("持有 ×$count",
+                            Text("Held ×$count",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -224,16 +224,16 @@ private fun ItemDetailDialog(
                 val typeText = when (item.type) {
                     ItemType.EQUIPMENT -> {
                         val slotName = when (item.equipSlot) {
-                            EquipSlot.WEAPON -> "Weapon / 武器"
-                            EquipSlot.ARMOR -> "Armor / 护甲"
-                            EquipSlot.ACCESSORY -> "Accessory / 饰品"
-                            null -> "Equipment / 装备"
+                            EquipSlot.WEAPON -> "Weapon"
+                            EquipSlot.ARMOR -> "Armor"
+                            EquipSlot.ACCESSORY -> "Accessory"
+                            null -> "Equipment"
                         }
                         val weaponName = item.weaponType?.let { " (${it.displayName()})" } ?: ""
                         "$slotName$weaponName"
                     }
-                    ItemType.CONSUMABLE -> "Consumable / 消耗品"
-                    ItemType.MATERIAL -> "Material / 材料"
+                    ItemType.CONSUMABLE -> "Consumable"
+                    ItemType.MATERIAL -> "Material"
                 }
                 Text(typeText, style = MaterialTheme.typography.bodySmall)
                 if (item.description.isNotEmpty()) {
@@ -242,14 +242,14 @@ private fun ItemDetailDialog(
                 HorizontalDivider()
                 if (item.baseValue > 0 && item.equipSlot != null) {
                     val label = when (item.equipSlot) {
-                        EquipSlot.WEAPON -> "ATK / 攻击力"
-                        EquipSlot.ARMOR -> "DEF / 防御力"
-                        else -> "Value / 数值"
+                        EquipSlot.WEAPON -> "ATK"
+                        EquipSlot.ARMOR -> "DEF"
+                        else -> "Value"
                     }
                     Text("$label: ${item.baseValue}", style = MaterialTheme.typography.bodyMedium)
                 }
                 if (item.statBonuses.isNotEmpty()) {
-                    Text("Bonus / 加成:", style = MaterialTheme.typography.labelMedium)
+                    Text("Bonus:", style = MaterialTheme.typography.labelMedium)
                     item.statBonuses.forEach { (stat, value) ->
                         Text("  +$value ${stat.name}",
                             style = MaterialTheme.typography.bodyMedium,
@@ -257,24 +257,16 @@ private fun ItemDetailDialog(
                     }
                 }
                 if (item.statRequirements.isNotEmpty()) {
-                    Text("Requirements / 装备需求:", style = MaterialTheme.typography.labelMedium)
+                    Text("Requirements:", style = MaterialTheme.typography.labelMedium)
                     item.statRequirements.forEach { (stat, req) ->
                         Text("  ${stat.name} >= $req", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                if (item.traits.isNotEmpty()) {
-                    Text("Traits / 特性:", style = MaterialTheme.typography.labelMedium)
-                    item.traits.forEach { tid ->
-                        Text("  • $tid",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.tertiary)
-                    }
-                }
                 HorizontalDivider()
-                Text("Unit price / 单价: ${item.sellPrice} G",
+                Text("Unit price: ${item.sellPrice} G",
                     style = MaterialTheme.typography.bodyMedium)
                 if (count > 1) {
-                    Text("Total / 全卖: ${item.sellPrice * count} G  (×$count)",
+                    Text("Total: ${item.sellPrice * count} G  (×$count)",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary)
                 }
@@ -290,7 +282,7 @@ private fun ItemDetailDialog(
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error
                         )
-                    ) { Text("卖一个 (${item.sellPrice} G)") }
+                    ) { Text("Sell One (${item.sellPrice} G)") }
                     if (count > 1) {
                         Button(
                             onClick = onSellAll,
@@ -298,13 +290,13 @@ private fun ItemDetailDialog(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.error
                             )
-                        ) { Text("全卖 ×$count") }
+                        ) { Text("Sell All ×$count") }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close / 关闭") }
+            TextButton(onClick = onDismiss) { Text("Close") }
         }
     )
 }

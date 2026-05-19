@@ -34,7 +34,7 @@ fun TavernScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tavern / 酒馆  Lv.$tavernLevel") },
+                title = { Text("Tavern  Lv.$tavernLevel") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -43,7 +43,7 @@ fun TavernScreen(
                 actions = {
                     val isMax = tavernLevel >= 10
                     TextButton(onClick = onInvest, enabled = !isMax) {
-                        Text(if (isMax) "MAX / 已满" else "Invest / 投资")
+                        Text(if (isMax) "MAX" else "Invest")
                     }
                 }
             )
@@ -94,7 +94,7 @@ private fun HeroRecruitCard(
                 }
             }
             Button(onClick = { onRecruit(hero.id) }) {
-                Text("Recruit\n招募")
+                Text("Recruit")
             }
         }
     }

@@ -66,8 +66,7 @@ object ItemRegistry {
     private fun weapon(
         id: String, name: String, type: WeaponType,
         level: Int, rarity: Rarity, icon: Int = R.drawable.empty,
-        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true,
-        traits: List<String> = emptyList()
+        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true
     ): Item = Item(
         id = id, name = name, description = desc,
         type = ItemType.EQUIPMENT, rarity = rarity,
@@ -77,15 +76,13 @@ object ItemRegistry {
         statRequirements = reqFor(type, level),
         purchasable = purchasable ?: (rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON),
         lootable = lootable,
-        iconRes = icon,
-        traits = traits
+        iconRes = icon
     )
 
     private fun armor(
         id: String, name: String, type: WeaponType,
         level: Int, rarity: Rarity, icon: Int = R.drawable.empty,
-        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true,
-        traits: List<String> = emptyList()
+        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true
     ): Item = Item(
         id = id, name = name, description = desc,
         type = ItemType.EQUIPMENT, rarity = rarity,
@@ -95,8 +92,7 @@ object ItemRegistry {
         statRequirements = reqFor(type, level),
         purchasable = purchasable ?: (rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON),
         lootable = lootable,
-        iconRes = icon,
-        traits = traits
+        iconRes = icon
     )
 
     private fun accessory(
@@ -104,8 +100,7 @@ object ItemRegistry {
         level: Int, rarity: Rarity, primaryStat: StatType,
         icon: Int = R.drawable.empty,
         secondaryStat: StatType? = null,
-        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true,
-        traits: List<String> = emptyList()
+        desc: String = "", purchasable: Boolean? = null, lootable: Boolean = true
     ): Item {
         val n = accessoryBonus(level, rarity)
         val bonuses = mutableMapOf(primaryStat to n)
@@ -118,16 +113,14 @@ object ItemRegistry {
             statBonuses = bonuses,
             purchasable = purchasable ?: (rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON),
             lootable = lootable,
-            iconRes = icon,
-            traits = traits
+            iconRes = icon
         )
     }
 
     private fun accessoryAll(
         id: String, name: String, level: Int, rarity: Rarity,
         icon: Int = R.drawable.empty, desc: String = "",
-        purchasable: Boolean? = null, lootable: Boolean = true,
-        traits: List<String> = emptyList()
+        purchasable: Boolean? = null, lootable: Boolean = true
     ): Item {
         val n = accessoryBonus(level, rarity)
         return Item(
@@ -138,8 +131,7 @@ object ItemRegistry {
             statBonuses = StatType.entries.associateWith { n },
             purchasable = purchasable ?: (rarity == Rarity.COMMON || rarity == Rarity.UNCOMMON),
             lootable = lootable,
-            iconRes = icon,
-            traits = traits
+            iconRes = icon
         )
     }
 
@@ -147,16 +139,14 @@ object ItemRegistry {
         id: String, name: String, desc: String,
         level: Int = 1, rarity: Rarity = Rarity.COMMON,
         purchasable: Boolean = true, lootable: Boolean = false,
-        restoreHp: Int = 0, restoreMp: Int = 0,
-        traits: List<String> = emptyList()
+        restoreHp: Int = 0, restoreMp: Int = 0
     ): Item = Item(
         id = id, name = name, description = desc,
         type = ItemType.CONSUMABLE, rarity = rarity,
         equipLevel = level,
         purchasable = purchasable, lootable = lootable,
         iconRes = R.drawable.empty,
-        restoreHp = restoreHp, restoreMp = restoreMp,
-        traits = traits
+        restoreHp = restoreHp, restoreMp = restoreMp
     )
 
     private fun material(
@@ -178,201 +168,201 @@ object ItemRegistry {
         // ── 剑 (SWORD) — 75 件，对应 res/drawable 中所有剑类图片 ──
         listOf(
             // L1 — 入门铁剑
-            weapon("rusty_iron_sword", "锈蚀铁剑", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.rusty_iron_sword, "布满锈迹的旧剑"),
-            weapon("basic_iron_sword", "朴铁剑", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.basic_iron_sword, "最基础的铁剑"),
-            weapon("common_iron_sword", "普通铁剑", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.common_iron_sword, "随处可见的铁剑"),
-            weapon("petite_iron_sword", "小铁剑", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.petite_iron_sword, "尺寸偏小的铁剑"),
-            weapon("thin_short_sword", "细身短剑", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.thin_short_sword, "纤细的短剑"),
-            weapon("iron_shortsword", "铁短剑", WeaponType.SWORD, 1, Rarity.UNCOMMON, R.drawable.iron_shortsword, "做工尚可的铁短剑"),
-            weapon("gladius", "角斗士剑", WeaponType.SWORD, 1, Rarity.UNCOMMON, R.drawable.gladius, "古罗马角斗士爱用的短剑"),
+            weapon("rusty_iron_sword", "Rusty Iron Sword", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.rusty_iron_sword, "An old sword covered in rust"),
+            weapon("basic_iron_sword", "Basic Iron Sword", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.basic_iron_sword, "The most basic iron sword"),
+            weapon("common_iron_sword", "Common Iron Sword", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.common_iron_sword, "An iron sword found everywhere"),
+            weapon("petite_iron_sword", "Petite Iron Sword", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.petite_iron_sword, "A smaller-than-usual iron sword"),
+            weapon("thin_short_sword", "Thin Short Sword", WeaponType.SWORD, 1, Rarity.COMMON, R.drawable.thin_short_sword, "A slender short sword"),
+            weapon("iron_shortsword", "Iron Shortsword", WeaponType.SWORD, 1, Rarity.UNCOMMON, R.drawable.iron_shortsword, "A decently crafted iron shortsword"),
+            weapon("gladius", "Gladius", WeaponType.SWORD, 1, Rarity.UNCOMMON, R.drawable.gladius, "The short sword favored by Roman gladiators"),
 
             // L2
-            weapon("plain_iron_arming_sword", "朴铁佩剑", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.plain_iron_arming_sword, "平凡的佩剑"),
-            weapon("plain_steel_sword", "朴素钢剑", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.plain_steel_sword, "无饰的钢剑"),
-            weapon("simple_steel_sword", "简易钢剑", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.simple_steel_sword, "工艺简单的钢剑"),
-            weapon("cobbled_iron_sword", "拼接铁剑", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.cobbled_iron_sword, "由数块铁拼接而成"),
-            weapon("traveler_iron_sword", "旅人铁剑", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.traveler_iron_sword, "旅行者随身佩剑"),
-            weapon("wooden_hilt_sword", "木柄剑", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.wooden_hilt_sword, "握感舒适的木柄"),
-            weapon("iron_long_sword", "铁制长剑", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.iron_long_sword, "标准制式长剑"),
+            weapon("plain_iron_arming_sword", "Plain Iron Arming Sword", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.plain_iron_arming_sword, "An ordinary arming sword"),
+            weapon("plain_steel_sword", "Plain Steel Sword", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.plain_steel_sword, "An unadorned steel sword"),
+            weapon("simple_steel_sword", "Simple Steel Sword", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.simple_steel_sword, "A simply crafted steel sword"),
+            weapon("cobbled_iron_sword", "Cobbled Iron Sword", WeaponType.SWORD, 2, Rarity.COMMON, R.drawable.cobbled_iron_sword, "Forged from several pieces of iron"),
+            weapon("traveler_iron_sword", "Traveler Iron Sword", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.traveler_iron_sword, "A traveler's trusty sidearm"),
+            weapon("wooden_hilt_sword", "Wooden Hilt Sword", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.wooden_hilt_sword, "A comfortable wooden grip"),
+            weapon("iron_long_sword", "Iron Long Sword", WeaponType.SWORD, 2, Rarity.UNCOMMON, R.drawable.iron_long_sword, "A standard-issue longsword"),
 
             // L3
-            weapon("broad_iron_sword", "阔身铁剑", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.broad_iron_sword, "宽刃铁剑"),
-            weapon("heavy_iron_sword", "重型铁剑", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.heavy_iron_sword, "重得有些笨拙"),
-            weapon("rugged_iron_sword", "粗朴铁剑", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.rugged_iron_sword, "粗犷的铁剑"),
-            weapon("common_arming_sword", "寻常佩剑", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.common_arming_sword, "骑士的常备武器"),
-            weapon("soldier_sword", "士兵剑", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.soldier_sword, "正规军制式装备"),
-            weapon("squire_sword", "侍从剑", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.squire_sword, "训练有素的侍从所用"),
-            weapon("studded_iron_sword", "钉饰铁剑", WeaponType.SWORD, 3, Rarity.RARE, R.drawable.studded_iron_sword, "剑柄镶嵌铆钉"),
-            weapon("guardsman_sword", "卫兵剑", WeaponType.SWORD, 3, Rarity.RARE, R.drawable.guardsman_sword, "城卫军特制武器"),
+            weapon("broad_iron_sword", "Broad Iron Sword", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.broad_iron_sword, "A broad-bladed iron sword"),
+            weapon("heavy_iron_sword", "Heavy Iron Sword", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.heavy_iron_sword, "So heavy it feels clumsy"),
+            weapon("rugged_iron_sword", "Rugged Iron Sword", WeaponType.SWORD, 3, Rarity.COMMON, R.drawable.rugged_iron_sword, "A coarse, rugged iron sword"),
+            weapon("common_arming_sword", "Common Arming Sword", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.common_arming_sword, "A knight's standard weapon"),
+            weapon("soldier_sword", "Soldier Sword", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.soldier_sword, "Regular army standard-issue gear"),
+            weapon("squire_sword", "Squire Sword", WeaponType.SWORD, 3, Rarity.UNCOMMON, R.drawable.squire_sword, "Carried by well-trained squires"),
+            weapon("studded_iron_sword", "Studded Iron Sword", WeaponType.SWORD, 3, Rarity.RARE, R.drawable.studded_iron_sword, "The hilt is set with rivets"),
+            weapon("guardsman_sword", "Guardsman Sword", WeaponType.SWORD, 3, Rarity.RARE, R.drawable.guardsman_sword, "A weapon specially made for the city guard"),
 
             // L4 — 引入 EPIC
-            weapon("long_iron_blade", "长身铁刃", WeaponType.SWORD, 4, Rarity.COMMON, R.drawable.long_iron_blade, "刃长一码的铁剑"),
-            weapon("bronze_engraved_sword", "青铜雕纹剑", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.bronze_engraved_sword, "青铜剑身雕有古纹"),
-            weapon("adventurer_long_sword", "冒险者长剑", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.adventurer_long_sword, "冒险者协会推荐"),
-            weapon("bronze_longsword", "青铜长剑", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.bronze_longsword, "古代青铜锻造"),
-            weapon("wanderer_sword", "漫游者剑", WeaponType.SWORD, 4, Rarity.RARE, R.drawable.wanderer_sword, "漫游剑客的传家宝"),
-            weapon("cross_guard_iron_sword", "十字护手剑", WeaponType.SWORD, 4, Rarity.RARE, R.drawable.cross_guard_iron_sword, "护手呈十字形"),
-            weapon("crosshilt_iron_sword", "十字柄铁剑", WeaponType.SWORD, 4, Rarity.EPIC, R.drawable.crosshilt_iron_sword, "圣堂武装"),
+            weapon("long_iron_blade", "Long Iron Blade", WeaponType.SWORD, 4, Rarity.COMMON, R.drawable.long_iron_blade, "An iron sword with a yard-long blade"),
+            weapon("bronze_engraved_sword", "Bronze Engraved Sword", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.bronze_engraved_sword, "A bronze blade engraved with ancient patterns"),
+            weapon("adventurer_long_sword", "Adventurer Long Sword", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.adventurer_long_sword, "Recommended by the Adventurers' Guild"),
+            weapon("bronze_longsword", "Bronze Longsword", WeaponType.SWORD, 4, Rarity.UNCOMMON, R.drawable.bronze_longsword, "Forged from ancient bronze"),
+            weapon("wanderer_sword", "Wanderer Sword", WeaponType.SWORD, 4, Rarity.RARE, R.drawable.wanderer_sword, "A wandering swordsman's heirloom"),
+            weapon("cross_guard_iron_sword", "Cross Guard Iron Sword", WeaponType.SWORD, 4, Rarity.RARE, R.drawable.cross_guard_iron_sword, "Its guard forms a cross shape"),
+            weapon("crosshilt_iron_sword", "Crosshilt Iron Sword", WeaponType.SWORD, 4, Rarity.EPIC, R.drawable.crosshilt_iron_sword, "Armament of the holy temple"),
 
             // L5
-            weapon("silver_arming_sword", "银佩剑", WeaponType.SWORD, 5, Rarity.COMMON, R.drawable.silver_arming_sword, "镀银的标准佩剑"),
-            weapon("silver_thin_sword", "银细剑", WeaponType.SWORD, 5, Rarity.UNCOMMON, R.drawable.silver_thin_sword, "纤薄的银剑"),
-            weapon("silver_broadsword", "银阔剑", WeaponType.SWORD, 5, Rarity.UNCOMMON, R.drawable.silver_broadsword, "宽阔的银剑"),
-            weapon("falchion", "弯刀", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.falchion, "单刃弯刀，劈砍犀利"),
-            weapon("curved_machete", "弯刃砍刀", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.curved_machete, "丛林开路的利器"),
-            weapon("curved_saber", "弧月军刀", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.curved_saber, "弧形军刀"),
-            weapon("skull_pommel_sword", "骷髅柄剑", WeaponType.SWORD, 5, Rarity.EPIC, R.drawable.skull_pommel_sword, "剑首雕成头骨"),
-            weapon("mossy_blade_sword", "苔纹剑", WeaponType.SWORD, 5, Rarity.EPIC, R.drawable.mossy_blade_sword, "古剑被青苔覆盖却仍锐利"),
+            weapon("silver_arming_sword", "Silver Arming Sword", WeaponType.SWORD, 5, Rarity.COMMON, R.drawable.silver_arming_sword, "A silver-plated standard arming sword"),
+            weapon("silver_thin_sword", "Silver Thin Sword", WeaponType.SWORD, 5, Rarity.UNCOMMON, R.drawable.silver_thin_sword, "A slender silver sword"),
+            weapon("silver_broadsword", "Silver Broadsword", WeaponType.SWORD, 5, Rarity.UNCOMMON, R.drawable.silver_broadsword, "A broad silver sword"),
+            weapon("falchion", "Falchion", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.falchion, "A single-edged blade with sharp cleaving power"),
+            weapon("curved_machete", "Curved Machete", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.curved_machete, "A sharp tool for cutting through jungle"),
+            weapon("curved_saber", "Curved Saber", WeaponType.SWORD, 5, Rarity.RARE, R.drawable.curved_saber, "A curved military saber"),
+            weapon("skull_pommel_sword", "Skull Pommel Sword", WeaponType.SWORD, 5, Rarity.EPIC, R.drawable.skull_pommel_sword, "Its pommel is carved into a skull"),
+            weapon("mossy_blade_sword", "Mossy Blade Sword", WeaponType.SWORD, 5, Rarity.EPIC, R.drawable.mossy_blade_sword, "An ancient sword covered in moss yet still sharp"),
 
             // L6
-            weapon("dark_steel_sword", "玄钢剑", WeaponType.SWORD, 6, Rarity.COMMON, R.drawable.dark_steel_sword, "暗黑色的钢剑"),
-            weapon("wide_steel_blade", "阔身钢刃", WeaponType.SWORD, 6, Rarity.UNCOMMON, R.drawable.wide_steel_blade, "宽阔的钢刃"),
-            weapon("wide_cross_sword", "宽十字剑", WeaponType.SWORD, 6, Rarity.UNCOMMON, R.drawable.wide_cross_sword, "宽护手十字剑"),
-            weapon("stone_blade_sword", "石刃剑", WeaponType.SWORD, 6, Rarity.RARE, R.drawable.stone_blade_sword, "石化魔法处理的奇剑"),
-            weapon("stoneforged_sword", "石锻剑", WeaponType.SWORD, 6, Rarity.RARE, R.drawable.stoneforged_sword, "矮人石锻工艺"),
-            weapon("crossed_skull_swords", "双骷髅剑", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.crossed_skull_swords, "刻有交叉骷髅的禁忌之剑"),
-            weapon("frostblade_sword", "霜刃剑", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.frostblade_sword, "刃身永远覆着寒霜"),
-            weapon("flame_sword", "烈焰剑", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.flame_sword, "刃身燃烧着不灭之火"),
+            weapon("dark_steel_sword", "Dark Steel Sword", WeaponType.SWORD, 6, Rarity.COMMON, R.drawable.dark_steel_sword, "A dark-colored steel sword"),
+            weapon("wide_steel_blade", "Wide Steel Blade", WeaponType.SWORD, 6, Rarity.UNCOMMON, R.drawable.wide_steel_blade, "A broad steel blade"),
+            weapon("wide_cross_sword", "Wide Cross Sword", WeaponType.SWORD, 6, Rarity.UNCOMMON, R.drawable.wide_cross_sword, "A cross sword with a wide guard"),
+            weapon("stone_blade_sword", "Stone Blade Sword", WeaponType.SWORD, 6, Rarity.RARE, R.drawable.stone_blade_sword, "A strange sword treated with petrification magic"),
+            weapon("stoneforged_sword", "Stoneforged Sword", WeaponType.SWORD, 6, Rarity.RARE, R.drawable.stoneforged_sword, "Crafted with dwarven stone-forging techniques"),
+            weapon("crossed_skull_swords", "Crossed Skull Swords", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.crossed_skull_swords, "A forbidden sword carved with crossed skulls"),
+            weapon("frostblade_sword", "Frostblade Sword", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.frostblade_sword, "Its blade is forever coated in frost"),
+            weapon("flame_sword", "Flame Sword", WeaponType.SWORD, 6, Rarity.EPIC, R.drawable.flame_sword, "Its blade burns with an undying fire"),
 
             // L7 — 引入 LEGENDARY
-            weapon("silver_gold_hilt_sword", "银金柄剑", WeaponType.SWORD, 7, Rarity.UNCOMMON, R.drawable.silver_gold_hilt_sword, "银金交错的华丽剑柄"),
-            weapon("gold_hilt_longsword", "金柄长剑", WeaponType.SWORD, 7, Rarity.RARE, R.drawable.gold_hilt_longsword, "纯金剑柄"),
-            weapon("gold_edged_falchion", "金边弯刀", WeaponType.SWORD, 7, Rarity.RARE, R.drawable.gold_edged_falchion, "刃边镀金的弯刀"),
-            weapon("knight_great_sword", "骑士巨剑", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.knight_great_sword, "骑士团长专用"),
-            weapon("ice_engraved_sword", "寒霜雕剑", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.ice_engraved_sword, "雕有冰晶纹路"),
-            weapon("ice_etched_sword", "冰蚀剑", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.ice_etched_sword, "刃身被极寒侵蚀"),
-            weapon("flame_runed_sword", "焰纹剑", WeaponType.SWORD, 7, Rarity.LEGENDARY, R.drawable.flame_runed_sword, "刻满火焰符文的传说之剑"),
+            weapon("silver_gold_hilt_sword", "Silver Gold Hilt Sword", WeaponType.SWORD, 7, Rarity.UNCOMMON, R.drawable.silver_gold_hilt_sword, "An ornate hilt interwoven with silver and gold"),
+            weapon("gold_hilt_longsword", "Gold Hilt Longsword", WeaponType.SWORD, 7, Rarity.RARE, R.drawable.gold_hilt_longsword, "A pure gold hilt"),
+            weapon("gold_edged_falchion", "Gold Edged Falchion", WeaponType.SWORD, 7, Rarity.RARE, R.drawable.gold_edged_falchion, "A falchion with a gold-plated edge"),
+            weapon("knight_great_sword", "Knight Great Sword", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.knight_great_sword, "Reserved for the knight commander"),
+            weapon("ice_engraved_sword", "Ice Engraved Sword", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.ice_engraved_sword, "Engraved with ice crystal patterns"),
+            weapon("ice_etched_sword", "Ice Etched Sword", WeaponType.SWORD, 7, Rarity.EPIC, R.drawable.ice_etched_sword, "Its blade is eroded by extreme cold"),
+            weapon("flame_runed_sword", "Flame Runed Sword", WeaponType.SWORD, 7, Rarity.LEGENDARY, R.drawable.flame_runed_sword, "A legendary sword inscribed with flame runes"),
 
             // L8
-            weapon("gilded_runed_sword", "鎏金符纹剑", WeaponType.SWORD, 8, Rarity.RARE, R.drawable.gilded_runed_sword, "鎏金护手雕刻符文"),
-            weapon("cyan_iceblade_sword", "冰青之剑", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.cyan_iceblade_sword, "刃身散发青色寒光"),
-            weapon("blue_blade_sword", "蓝刃剑", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.blue_blade_sword, "通体蔚蓝的奇剑"),
-            weapon("glowing_blue_runic_sword", "蓝光符文剑", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.glowing_blue_runic_sword, "符文散发蓝色光芒"),
-            weapon("poison_sword", "毒剑", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.poison_sword, "刃身淬有剧毒"),
-            weapon("pink_magic_sword", "粉魔剑", WeaponType.SWORD, 8, Rarity.LEGENDARY, R.drawable.pink_magic_sword, "粉色魔法附魔之剑"),
-            weapon("rose_magic_sword", "蔷薇魔剑", WeaponType.SWORD, 8, Rarity.LEGENDARY, R.drawable.rose_magic_sword, "缠绕蔷薇藤蔓的魔剑"),
+            weapon("gilded_runed_sword", "Gilded Runed Sword", WeaponType.SWORD, 8, Rarity.RARE, R.drawable.gilded_runed_sword, "A gilded guard carved with runes"),
+            weapon("cyan_iceblade_sword", "Cyan Iceblade Sword", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.cyan_iceblade_sword, "Its blade emits a cyan icy glow"),
+            weapon("blue_blade_sword", "Blue Blade Sword", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.blue_blade_sword, "A strange sword azure all over"),
+            weapon("glowing_blue_runic_sword", "Glowing Blue Runic Sword", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.glowing_blue_runic_sword, "Its runes emit a blue radiance"),
+            weapon("poison_sword", "Poison Sword", WeaponType.SWORD, 8, Rarity.EPIC, R.drawable.poison_sword, "Its blade is coated with deadly poison"),
+            weapon("pink_magic_sword", "Pink Magic Sword", WeaponType.SWORD, 8, Rarity.LEGENDARY, R.drawable.pink_magic_sword, "A sword enchanted with pink magic"),
+            weapon("rose_magic_sword", "Rose Magic Sword", WeaponType.SWORD, 8, Rarity.LEGENDARY, R.drawable.rose_magic_sword, "A magic sword entwined with rose vines"),
 
             // L9
-            weapon("enchanted_sapphire_sword", "附魔蓝晶剑", WeaponType.SWORD, 9, Rarity.RARE, R.drawable.enchanted_sapphire_sword, "蓝宝石附魔之剑"),
-            weapon("red_etched_blade", "赤纹刃剑", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.red_etched_blade, "刃身雕刻血红纹路"),
-            weapon("blood_blade_sword", "血刃剑", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.blood_blade_sword, "饮血无数的凶剑"),
-            weapon("ruby_pommel_sword", "红宝柄剑", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.ruby_pommel_sword, "剑首镶嵌红宝石"),
-            weapon("ruby_gem_sword", "红宝石剑", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.ruby_gem_sword, "整柄镶满红宝石"),
-            weapon("sapphire_gem_sword", "蓝宝石剑", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.sapphire_gem_sword, "整柄镶满蓝宝石"),
-            weapon("emerald_short_sword", "翡翠短剑", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.emerald_short_sword, "翡翠雕琢的短剑"),
+            weapon("enchanted_sapphire_sword", "Enchanted Sapphire Sword", WeaponType.SWORD, 9, Rarity.RARE, R.drawable.enchanted_sapphire_sword, "A sword enchanted with sapphire"),
+            weapon("red_etched_blade", "Red Etched Blade", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.red_etched_blade, "Its blade is etched with blood-red patterns"),
+            weapon("blood_blade_sword", "Blood Blade Sword", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.blood_blade_sword, "A vicious sword that has drunk countless blood"),
+            weapon("ruby_pommel_sword", "Ruby Pommel Sword", WeaponType.SWORD, 9, Rarity.EPIC, R.drawable.ruby_pommel_sword, "Its pommel is set with a ruby"),
+            weapon("ruby_gem_sword", "Ruby Gem Sword", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.ruby_gem_sword, "The whole hilt is studded with rubies"),
+            weapon("sapphire_gem_sword", "Sapphire Gem Sword", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.sapphire_gem_sword, "The whole hilt is studded with sapphires"),
+            weapon("emerald_short_sword", "Emerald Short Sword", WeaponType.SWORD, 9, Rarity.LEGENDARY, R.drawable.emerald_short_sword, "A short sword carved from jade"),
 
             // L10 — 顶端
-            weapon("emerald_sword", "翡翠剑", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.emerald_sword, "翡翠铸成的长剑"),
-            weapon("teal_jewel_sword", "翠玉剑", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.teal_jewel_sword, "镶嵌翠玉的宝剑"),
-            weapon("red_jewel_sword", "朱玉剑", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.red_jewel_sword, "镶嵌朱红宝玉的宝剑"),
-            weapon("amethyst_blade_sword", "紫晶刃", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.amethyst_blade_sword, "紫水晶铸成的刃"),
-            weapon("amethyst_starlight_sword", "紫晶星辰剑", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.amethyst_starlight_sword, "紫晶剑身映出星辰之光"),
-            weapon("enchanted_starblade_sword", "附魔星辰剑", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.enchanted_starblade_sword, "封印一颗星魂的传说之剑"),
-            weapon("diamond_crystal_sword", "钻晶剑", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.diamond_crystal_sword, "钻石雕琢的至宝"),
-            weapon("starlight_navy_sword", "星海剑", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.starlight_navy_sword, "深蓝刃身缀满星辰"),
-            weapon("ruby_knight_sword", "红宝骑士剑", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.ruby_knight_sword, "传说中圣骑士的红宝佩剑")
+            weapon("emerald_sword", "Emerald Sword", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.emerald_sword, "A longsword forged from emerald"),
+            weapon("teal_jewel_sword", "Teal Jewel Sword", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.teal_jewel_sword, "A precious sword set with teal jewels"),
+            weapon("red_jewel_sword", "Red Jewel Sword", WeaponType.SWORD, 10, Rarity.EPIC, R.drawable.red_jewel_sword, "A precious sword set with crimson jewels"),
+            weapon("amethyst_blade_sword", "Amethyst Blade Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.amethyst_blade_sword, "A blade forged from amethyst"),
+            weapon("amethyst_starlight_sword", "Amethyst Starlight Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.amethyst_starlight_sword, "Its amethyst blade reflects starlight"),
+            weapon("enchanted_starblade_sword", "Enchanted Starblade Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.enchanted_starblade_sword, "A legendary sword sealing a star soul"),
+            weapon("diamond_crystal_sword", "Diamond Crystal Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.diamond_crystal_sword, "A treasure carved from diamond"),
+            weapon("starlight_navy_sword", "Starlight Navy Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.starlight_navy_sword, "A deep blue blade studded with stars"),
+            weapon("ruby_knight_sword", "Ruby Knight Sword", WeaponType.SWORD, 10, Rarity.LEGENDARY, R.drawable.ruby_knight_sword, "The legendary ruby sword of the holy knight")
         ) +
 
         // ── 匕首 (DAGGER) — 13 件 ──
         listOf(
-            weapon("small_iron_dagger", "小铁匕", WeaponType.DAGGER, 1, Rarity.COMMON, R.drawable.small_iron_dagger, "随手可得的小匕"),
-            weapon("bronze_short_dagger", "青铜短匕", WeaponType.DAGGER, 1, Rarity.COMMON, R.drawable.bronze_short_dagger, "青铜铸造的短匕"),
-            weapon("iron_short_blade", "铁制短刃", WeaponType.DAGGER, 2, Rarity.COMMON, R.drawable.iron_short_blade, "薄而锋利的铁刃"),
-            weapon("leather_grip_dagger", "皮柄匕首", WeaponType.DAGGER, 2, Rarity.UNCOMMON, R.drawable.leather_grip_dagger, "缠皮的握柄牢固防滑"),
-            weapon("thin_combat_dagger", "细身战匕", WeaponType.DAGGER, 3, Rarity.COMMON, R.drawable.thin_combat_dagger, "战场常用的细匕"),
-            weapon("iron_combat_dagger", "铁制战匕", WeaponType.DAGGER, 3, Rarity.UNCOMMON, R.drawable.iron_combat_dagger, "军用制式战斗匕"),
-            weapon("broad_dagger", "阔身匕首", WeaponType.DAGGER, 4, Rarity.UNCOMMON, R.drawable.broad_dagger, "宽刃匕首，破甲犀利"),
-            weapon("hunting_dagger", "狩猎匕", WeaponType.DAGGER, 4, Rarity.RARE, R.drawable.hunting_dagger, "猎人剥皮割肉的利器"),
-            weapon("sickle_blade_dagger", "镰刃匕首", WeaponType.DAGGER, 5, Rarity.RARE, R.drawable.sickle_blade_dagger, "镰刀状的奇形匕首"),
-            weapon("curved_throwing_dagger", "弧形飞刀", WeaponType.DAGGER, 5, Rarity.RARE, R.drawable.curved_throwing_dagger, "投掷专用的弧形匕"),
-            weapon("kris_dagger", "波纹刃", WeaponType.DAGGER, 6, Rarity.EPIC, R.drawable.kris_dagger, "刃身呈波浪形的祭祀匕首"),
-            weapon("ornate_dagger", "华饰匕首", WeaponType.DAGGER, 7, Rarity.EPIC, R.drawable.ornate_dagger, "刀柄华美雕饰的贵族匕首"),
-            weapon("emerald_dagger", "翡翠匕首", WeaponType.DAGGER, 8, Rarity.LEGENDARY, R.drawable.emerald_dagger, "翡翠所制的传说匕首")
+            weapon("small_iron_dagger", "Small Iron Dagger", WeaponType.DAGGER, 1, Rarity.COMMON, R.drawable.small_iron_dagger, "A small dagger easy to come by"),
+            weapon("bronze_short_dagger", "Bronze Short Dagger", WeaponType.DAGGER, 1, Rarity.COMMON, R.drawable.bronze_short_dagger, "A short dagger cast from bronze"),
+            weapon("iron_short_blade", "Iron Short Blade", WeaponType.DAGGER, 2, Rarity.COMMON, R.drawable.iron_short_blade, "A thin and sharp iron blade"),
+            weapon("leather_grip_dagger", "Leather Grip Dagger", WeaponType.DAGGER, 2, Rarity.UNCOMMON, R.drawable.leather_grip_dagger, "Its leather-wrapped grip is firm and non-slip"),
+            weapon("thin_combat_dagger", "Thin Combat Dagger", WeaponType.DAGGER, 3, Rarity.COMMON, R.drawable.thin_combat_dagger, "A thin dagger common on the battlefield"),
+            weapon("iron_combat_dagger", "Iron Combat Dagger", WeaponType.DAGGER, 3, Rarity.UNCOMMON, R.drawable.iron_combat_dagger, "A military standard-issue combat dagger"),
+            weapon("broad_dagger", "Broad Dagger", WeaponType.DAGGER, 4, Rarity.UNCOMMON, R.drawable.broad_dagger, "A broad-bladed dagger with sharp armor-piercing power"),
+            weapon("hunting_dagger", "Hunting Dagger", WeaponType.DAGGER, 4, Rarity.RARE, R.drawable.hunting_dagger, "A sharp tool for hunters to skin and butcher"),
+            weapon("sickle_blade_dagger", "Sickle Blade Dagger", WeaponType.DAGGER, 5, Rarity.RARE, R.drawable.sickle_blade_dagger, "An oddly shaped sickle-bladed dagger"),
+            weapon("curved_throwing_dagger", "Curved Throwing Dagger", WeaponType.DAGGER, 5, Rarity.RARE, R.drawable.curved_throwing_dagger, "A curved dagger made for throwing"),
+            weapon("kris_dagger", "Kris Dagger", WeaponType.DAGGER, 6, Rarity.EPIC, R.drawable.kris_dagger, "A ritual dagger with a wavy blade"),
+            weapon("ornate_dagger", "Ornate Dagger", WeaponType.DAGGER, 7, Rarity.EPIC, R.drawable.ornate_dagger, "A noble's dagger with an ornately decorated hilt"),
+            weapon("emerald_dagger", "Emerald Dagger", WeaponType.DAGGER, 8, Rarity.LEGENDARY, R.drawable.emerald_dagger, "A legendary dagger made of emerald")
         ) +
 
         // ── 矛 (SPEAR) — 暂用 empty 占位 ──
         listOf(
-            weapon("iron_spear", "铁矛", WeaponType.SPEAR, 3, Rarity.UNCOMMON, desc = "标准制式长矛"),
-            weapon("halberd", "战戟", WeaponType.SPEAR, 6, Rarity.RARE, desc = "兼备劈砍与穿刺")
+            weapon("iron_spear", "Iron Spear", WeaponType.SPEAR, 3, Rarity.UNCOMMON, desc = "A standard-issue spear"),
+            weapon("halberd", "Halberd", WeaponType.SPEAR, 6, Rarity.RARE, desc = "Capable of both cleaving and piercing")
         ) +
 
         // ── 弓 (BOW) — 游侠专属 ──
         listOf(
-            weapon("hunting_bow", "猎弓", WeaponType.BOW, 2, Rarity.UNCOMMON, desc = "森林猎人的可靠伙伴"),
-            weapon("composite_bow", "复合弓", WeaponType.BOW, 5, Rarity.RARE, desc = "多层材料压制而成"),
-            weapon("gale_bow", "疾风弓", WeaponType.BOW, 8, Rarity.EPIC, desc = "传说由风精灵赐予")
+            weapon("hunting_bow", "Hunting Bow", WeaponType.BOW, 2, Rarity.UNCOMMON, desc = "A reliable companion of forest hunters"),
+            weapon("composite_bow", "Composite Bow", WeaponType.BOW, 5, Rarity.RARE, desc = "Pressed from multiple layers of material"),
+            weapon("gale_bow", "Gale Bow", WeaponType.BOW, 8, Rarity.EPIC, desc = "Said to be granted by wind spirits")
         ) +
 
         // ── 法杖 (STAFF) — 法师专属 ──
         listOf(
-            weapon("wooden_staff", "木杖", WeaponType.STAFF, 1, Rarity.COMMON, desc = "蕴含微弱魔力的法杖"),
-            weapon("crystal_staff", "水晶法杖", WeaponType.STAFF, 4, Rarity.UNCOMMON, desc = "镶嵌纯净魔力水晶"),
-            weapon("arcane_scepter", "奥术权杖", WeaponType.STAFF, 7, Rarity.EPIC, desc = "古代魔导士的遗物")
+            weapon("wooden_staff", "Wooden Staff", WeaponType.STAFF, 1, Rarity.COMMON, desc = "A staff holding faint magical power"),
+            weapon("crystal_staff", "Crystal Staff", WeaponType.STAFF, 4, Rarity.UNCOMMON, desc = "Set with a pure mana crystal"),
+            weapon("arcane_scepter", "Arcane Scepter", WeaponType.STAFF, 7, Rarity.EPIC, desc = "A relic of an ancient archmage")
         ) +
 
         // ── 圣铃 (HOLY_BELL) — 圣职者专属 ──
         listOf(
-            weapon("wooden_bell", "木铃", WeaponType.HOLY_BELL, 1, Rarity.COMMON, desc = "祈祷者使用的简朴铃铛"),
-            weapon("silver_bell", "银铃", WeaponType.HOLY_BELL, 4, Rarity.UNCOMMON, desc = "纯银铸造，铃声清越"),
-            weapon("holy_bell", "圣铃", WeaponType.HOLY_BELL, 6, Rarity.RARE, desc = "受过祝福的圣物"),
-            weapon("divine_chime", "神圣之铃", WeaponType.HOLY_BELL, 8, Rarity.EPIC, desc = "传说天使遗落的铃铛")
+            weapon("wooden_bell", "Wooden Bell", WeaponType.HOLY_BELL, 1, Rarity.COMMON, desc = "A simple bell used by those who pray"),
+            weapon("silver_bell", "Silver Bell", WeaponType.HOLY_BELL, 4, Rarity.UNCOMMON, desc = "Cast from pure silver with a clear, crisp ring"),
+            weapon("holy_bell", "Holy Bell", WeaponType.HOLY_BELL, 6, Rarity.RARE, desc = "A blessed holy relic"),
+            weapon("divine_chime", "Divine Chime", WeaponType.HOLY_BELL, 8, Rarity.EPIC, desc = "Legend says it was a bell dropped by an angel")
         ) +
 
         // ── 轻甲 (LIGHT_ARMOR) ──
         listOf(
-            armor("leather_armor", "皮甲", WeaponType.LIGHT_ARMOR, 1, Rarity.COMMON, desc = "轻便的基础防具"),
-            armor("ranger_vest", "游侠皮衣", WeaponType.LIGHT_ARMOR, 3, Rarity.UNCOMMON, desc = "兼顾防护与灵活"),
-            armor("mage_robe", "法师长袍", WeaponType.LIGHT_ARMOR, 3, Rarity.UNCOMMON, desc = "织入魔纹的丝绸长袍"),
-            armor("shadow_cloak", "暗影斗篷", WeaponType.LIGHT_ARMOR, 6, Rarity.RARE, desc = "穿戴者身影变得模糊")
+            armor("leather_armor", "Leather Armor", WeaponType.LIGHT_ARMOR, 1, Rarity.COMMON, desc = "Lightweight basic protection"),
+            armor("ranger_vest", "Ranger Vest", WeaponType.LIGHT_ARMOR, 3, Rarity.UNCOMMON, desc = "Balances protection and agility"),
+            armor("mage_robe", "Mage Robe", WeaponType.LIGHT_ARMOR, 3, Rarity.UNCOMMON, desc = "A silk robe woven with magic patterns"),
+            armor("shadow_cloak", "Shadow Cloak", WeaponType.LIGHT_ARMOR, 6, Rarity.RARE, desc = "The wearer's silhouette becomes blurred")
         ) +
 
         // ── 重甲 (HEAVY_ARMOR) ──
         listOf(
-            armor("chain_mail", "锁子甲", WeaponType.HEAVY_ARMOR, 3, Rarity.UNCOMMON, desc = "铁环编织的重甲"),
-            armor("plate_armor", "板甲", WeaponType.HEAVY_ARMOR, 6, Rarity.RARE, desc = "骑士团标配的全身甲胄"),
-            armor("holy_plate", "圣骑士铠甲", WeaponType.HEAVY_ARMOR, 8, Rarity.EPIC, desc = "受到神圣祝福的全身甲")
+            armor("chain_mail", "Chain Mail", WeaponType.HEAVY_ARMOR, 3, Rarity.UNCOMMON, desc = "Heavy armor woven from iron rings"),
+            armor("plate_armor", "Plate Armor", WeaponType.HEAVY_ARMOR, 6, Rarity.RARE, desc = "Full-body armor standard for the knight order"),
+            armor("holy_plate", "Holy Plate", WeaponType.HEAVY_ARMOR, 8, Rarity.EPIC, desc = "Full-body armor with a holy blessing")
         ) +
 
         // ── 饰品 (ACCESSORY) — 唯一提供属性加成的装备 ──
         listOf(
-            accessory("iron_ring", "铁戒指", 1, Rarity.COMMON, StatType.STR, desc = "粗糙但结实的铁环"),
-            accessory("prayer_ring", "祈祷戒指", 3, Rarity.UNCOMMON, StatType.FTH, desc = "虔信者的圣物"),
-            accessory("agility_amulet", "敏捷护符", 3, Rarity.UNCOMMON, StatType.DEX, desc = "佩戴者身轻如燕"),
-            accessory("scholar_glasses", "学者眼镜", 3, Rarity.UNCOMMON, StatType.INT, desc = "据说是某位大魔导师的遗物"),
-            accessory("warriors_medal", "武勋章", 5, Rarity.RARE, StatType.STR, secondaryStat = StatType.DEX, desc = "鼓舞士气的军功章"),
-            accessory("life_pendant", "生命吊坠", 5, Rarity.RARE, StatType.FTH, secondaryStat = StatType.INT, desc = "翠绿宝石散发治愈之光"),
-            accessoryAll("dragon_eye_amulet", "龙眼项链", 9, Rarity.EPIC, desc = "镶嵌龙眼石，全属性提升")
+            accessory("iron_ring", "Iron Ring", 1, Rarity.COMMON, StatType.STR, desc = "A rough but sturdy iron band"),
+            accessory("prayer_ring", "Prayer Ring", 3, Rarity.UNCOMMON, StatType.FTH, desc = "A holy relic of the devout"),
+            accessory("agility_amulet", "Agility Amulet", 3, Rarity.UNCOMMON, StatType.DEX, desc = "The wearer becomes light as a swallow"),
+            accessory("scholar_glasses", "Scholar Glasses", 3, Rarity.UNCOMMON, StatType.INT, desc = "Said to be a relic of some great archmage"),
+            accessory("warriors_medal", "Warrior's Medal", 5, Rarity.RARE, StatType.STR, secondaryStat = StatType.DEX, desc = "A war medal that boosts morale"),
+            accessory("life_pendant", "Life Pendant", 5, Rarity.RARE, StatType.FTH, secondaryStat = StatType.INT, desc = "An emerald gem radiates healing light"),
+            accessoryAll("dragon_eye_amulet", "Dragon Eye Amulet", 9, Rarity.EPIC, desc = "Set with a dragon eye stone, boosting all stats")
         ) +
 
         // ── 消耗品 (CONSUMABLE) — 5 级血瓶 + 5 级蓝瓶, 等级 = 道具店上架等级 ──
         listOf(
             // 生命药水: T1-T5
-            consumable("health_potion",       "生命药水",       "回复 50 HP",  level = 1, rarity = Rarity.COMMON,   restoreHp = 50),
-            consumable("mid_health_potion",   "中级生命药水",   "回复 110 HP", level = 2, rarity = Rarity.COMMON,   restoreHp = 110),
-            consumable("great_health_potion", "高级生命药水",   "回复 220 HP", level = 3, rarity = Rarity.UNCOMMON, restoreHp = 220),
-            consumable("super_health_potion", "极品生命药水",   "回复 380 HP", level = 4, rarity = Rarity.RARE,     restoreHp = 380),
-            consumable("elixir_of_vitality",  "活力之精",       "回复 600 HP", level = 5, rarity = Rarity.EPIC,     restoreHp = 600),
+            consumable("health_potion",       "Health Potion",         "Restores 50 HP",  level = 1, rarity = Rarity.COMMON,   restoreHp = 50),
+            consumable("mid_health_potion",   "Mid Health Potion",     "Restores 110 HP", level = 2, rarity = Rarity.COMMON,   restoreHp = 110),
+            consumable("great_health_potion", "Greater Health Potion", "Restores 220 HP", level = 3, rarity = Rarity.UNCOMMON, restoreHp = 220),
+            consumable("super_health_potion", "Super Health Potion",   "Restores 380 HP", level = 4, rarity = Rarity.RARE,     restoreHp = 380),
+            consumable("elixir_of_vitality",  "Elixir of Vitality",    "Restores 600 HP", level = 5, rarity = Rarity.EPIC,     restoreHp = 600),
             // 魔法药水: T1-T5
-            consumable("mana_potion",         "魔力药水",       "回复 30 MP",  level = 1, rarity = Rarity.COMMON,   restoreMp = 30),
-            consumable("mid_mana_potion",     "中级魔力药水",   "回复 70 MP",  level = 2, rarity = Rarity.COMMON,   restoreMp = 70),
-            consumable("great_mana_potion",   "高级魔力药水",   "回复 140 MP", level = 3, rarity = Rarity.UNCOMMON, restoreMp = 140),
-            consumable("super_mana_potion",   "极品魔力药水",   "回复 240 MP", level = 4, rarity = Rarity.RARE,     restoreMp = 240),
-            consumable("elixir_of_arcana",    "奥术之精",       "回复 400 MP", level = 5, rarity = Rarity.EPIC,     restoreMp = 400)
+            consumable("mana_potion",         "Mana Potion",           "Restores 30 MP",  level = 1, rarity = Rarity.COMMON,   restoreMp = 30),
+            consumable("mid_mana_potion",     "Mid Mana Potion",       "Restores 70 MP",  level = 2, rarity = Rarity.COMMON,   restoreMp = 70),
+            consumable("great_mana_potion",   "Greater Mana Potion",   "Restores 140 MP", level = 3, rarity = Rarity.UNCOMMON, restoreMp = 140),
+            consumable("super_mana_potion",   "Super Mana Potion",     "Restores 240 MP", level = 4, rarity = Rarity.RARE,     restoreMp = 240),
+            consumable("elixir_of_arcana",    "Elixir of Arcana",      "Restores 400 MP", level = 5, rarity = Rarity.EPIC,     restoreMp = 400)
         ) +
 
         // ── 材料 (MATERIAL) — 仅地下城掉落，仓库出售 ──
         listOf(
-            material("iron_ore", "铁矿石", "常见的锻造材料", level = 1),
-            material("monster_bone", "怪物骨头", "可以卖个好价钱", level = 1),
-            material("slime_gel", "史莱姆凝胶", "黏糊糊的半透明胶质", level = 1),
-            material("goblin_ear", "哥布林耳朵", "讨伐证明，可换赏金", level = 1),
-            material("spider_silk", "蛛丝", "坚韧异常的蛛丝", level = 2),
-            material("ancient_coin", "古代金币", "古代货币，收藏家高价收购", level = 4, rarity = Rarity.UNCOMMON),
-            material("dark_shard", "暗黑碎片", "暗黑骑士铠甲的碎片", level = 5, rarity = Rarity.UNCOMMON),
-            material("magic_crystal", "魔力结晶", "稀有的魔法材料", level = 5, rarity = Rarity.RARE),
-            material("minotaur_horn", "牛头人角", "坚硬如铁的Boss素材", level = 7, rarity = Rarity.RARE),
-            material("lich_phylactery", "巫妖命匣碎片", "蕴含强大亡灵能量", level = 8, rarity = Rarity.EPIC),
-            material("dragon_scale", "龙鳞", "价值连城的龙鳞", level = 9, rarity = Rarity.EPIC)
+            material("iron_ore", "Iron Ore", "A common forging material", level = 1),
+            material("monster_bone", "Monster Bone", "Can fetch a good price", level = 1),
+            material("slime_gel", "Slime Gel", "A sticky, semi-transparent jelly", level = 1),
+            material("goblin_ear", "Goblin Ear", "Proof of a kill, exchangeable for bounty", level = 1),
+            material("spider_silk", "Spider Silk", "Exceptionally tough spider silk", level = 2),
+            material("ancient_coin", "Ancient Coin", "Ancient currency, bought at high prices by collectors", level = 4, rarity = Rarity.UNCOMMON),
+            material("dark_shard", "Dark Shard", "A shard from a dark knight's armor", level = 5, rarity = Rarity.UNCOMMON),
+            material("magic_crystal", "Magic Crystal", "A rare magical material", level = 5, rarity = Rarity.RARE),
+            material("minotaur_horn", "Minotaur Horn", "A boss material as hard as iron", level = 7, rarity = Rarity.RARE),
+            material("lich_phylactery", "Lich Phylactery Shard", "Contains powerful undead energy", level = 8, rarity = Rarity.EPIC),
+            material("dragon_scale", "Dragon Scale", "A priceless dragon scale", level = 9, rarity = Rarity.EPIC)
         )
     ).associateBy { it.id }
 

@@ -32,7 +32,7 @@ fun StartScreen(
             fontWeight = FontWeight.Bold
         )
         Text(
-            text = "放置地下城",
+            text = "An Idle RPG Adventure",
             fontSize = 18.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -43,17 +43,17 @@ fun StartScreen(
             Button(
                 onClick = onContinue,
                 modifier = Modifier.width(200.dp)
-            ) { Text("Continue / 继续游戏") }
+            ) { Text("Continue") }
             Spacer(Modifier.height(12.dp))
         }
 
         OutlinedButton(
             onClick = onNewGame,
             modifier = Modifier.width(200.dp)
-        ) { Text(if (hasExistingSave) "New Game / 重新开始" else "Start / 开始游戏") }
+        ) { Text(if (hasExistingSave) "New Game" else "Start") }
 
         Spacer(Modifier.height(12.dp))
 
-        TextButton(onClick = onExit) { Text("Exit / 退出") }
+        TextButton(onClick = onExit) { Text("Exit") }
     }
 }

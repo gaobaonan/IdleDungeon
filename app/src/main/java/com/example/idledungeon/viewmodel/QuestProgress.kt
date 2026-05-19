@@ -33,7 +33,7 @@ fun advanceQuestsIfNeeded(state: GameUiState): GameUiState {
             gameState = s.gameState.copy(
                 mainQuestIndex = idx + 1,
                 guild = oldGuild.copy(
-                    guildLevel    = oldGuild.guildLevel + 1,
+                    guildRank     = oldGuild.guildRank + 1,
                     maxCarryItems = oldGuild.maxCarryItems + 5
                 ),
                 hasUnreadQuestUpdate = true

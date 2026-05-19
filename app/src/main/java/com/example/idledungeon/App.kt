@@ -18,7 +18,7 @@ class App : Application(), DefaultLifecycleObserver {
     @Volatile private var inBackground = false
 
     private val crashHandler = CoroutineExceptionHandler { _, e ->
-        L.e("App", "协程报错咯~", e)
+        L.e("App", "协程报错", e)
     }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + crashHandler)
 

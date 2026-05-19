@@ -30,7 +30,7 @@ fun ItemShopScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Item Shop / 道具店  Lv.$shopLevel") },
+                title = { Text("Item Shop  Lv.$shopLevel") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -39,7 +39,7 @@ fun ItemShopScreen(
                 actions = {
                     val isMax = shopLevel >= 5
                     TextButton(onClick = onInvest, enabled = !isMax) {
-                        Text(if (isMax) "MAX / 已满" else "Invest / 投资")
+                        Text(if (isMax) "MAX" else "Invest")
                     }
                 }
             )
@@ -51,13 +51,13 @@ fun ItemShopScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                Text("Gold / 金币: ${gold} G",
+                Text("Gold: ${gold} G",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(bottom = 8.dp))
             }
             if (availableItems.isEmpty()) {
                 item {
-                    Text("Sold out / 已售罄 — 明日 0 点自动刷新",
+                    Text("Sold out — restocks at midnight",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(vertical = 24.dp))
                 }

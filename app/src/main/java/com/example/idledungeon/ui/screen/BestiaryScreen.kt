@@ -39,7 +39,7 @@ fun BestiaryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bestiary / 怪物图鉴 ($unlockedCount/${all.size})") },
+                title = { Text("Bestiary ($unlockedCount/${all.size})") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -88,12 +88,12 @@ private fun CodexCard(monster: Monster, killCount: Int) {
                             style = MaterialTheme.typography.titleSmall
                         )
                         Text(
-                            "Lv.${monster.level}  CP:${monster.combatPower}  击杀 ×$killCount",
+                            "Lv.${monster.level}  CP:${monster.combatPower}  Kills ×$killCount",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
-                        Text("??? / 未发现", style = MaterialTheme.typography.titleSmall)
+                        Text("??? / Undiscovered", style = MaterialTheme.typography.titleSmall)
                         Text("Lv.${monster.level}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline)
@@ -108,10 +108,10 @@ private fun CodexCard(monster: Monster, killCount: Int) {
                 )
                 if (monster.skills.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("技能:", style = MaterialTheme.typography.labelMedium)
+                    Text("Skills:", style = MaterialTheme.typography.labelMedium)
                     monster.skills.forEach { sk ->
                         Text(
-                            "  • ${sk.name} [${sk.effectType.name}] x${sk.powerMultiplier}, ${sk.triggerChance}% 触发",
+                            "  • ${sk.name} [${sk.effectType.name}] x${sk.powerMultiplier}, ${sk.triggerChance}% chance",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.tertiary
                         )
@@ -119,7 +119,7 @@ private fun CodexCard(monster: Monster, killCount: Int) {
                 }
                 if (monster.dropChances.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("掉落:", style = MaterialTheme.typography.labelMedium)
+                    Text("Drops:", style = MaterialTheme.typography.labelMedium)
                     monster.dropChances.forEach { (id, chance) ->
                         Text(
                             "  • $id ($chance%)",

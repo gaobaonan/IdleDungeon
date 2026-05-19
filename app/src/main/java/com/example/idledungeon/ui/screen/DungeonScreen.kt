@@ -45,7 +45,7 @@ fun DungeonScreen(
         com.example.idledungeon.notification.ExpeditionEventBus.events.collect { event ->
             if (event is com.example.idledungeon.notification.ExpeditionEvent.Retreated) {
                 snackbarHostState.showSnackbar(
-                    message = "本次探险结束: ${event.reason} — 已归城",
+                    message = "Expedition ended: ${event.reason} — returned to town",
                     duration = SnackbarDuration.Short
                 )
             }
@@ -55,7 +55,7 @@ fun DungeonScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Dungeon / 地下城") },
+                title = { Text("Dungeon") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -71,7 +71,7 @@ fun DungeonScreen(
                     DungeonMapCanvas(floor, expedition)
                 } else {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("No map data / 暂无地图数据",
+                        Text("No map data",
                             style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -129,7 +129,7 @@ fun DungeonScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No expedition log / 暂无冒险记录",
+                    Text("No expedition log",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.outline)
                 }
@@ -140,7 +140,7 @@ fun DungeonScreen(
                 Button(
                     onClick = onDepart,
                     modifier = Modifier.fillMaxWidth().padding(12.dp)
-                ) { Text("Depart / 出发") }
+                ) { Text("Depart") }
             }
 
             // ── 事件详情临时页 ──
@@ -184,12 +184,12 @@ private fun PartyHpMpBars(expedition: ExpeditionSession, allHeroes: List<Hero>) 
                     if (c > 1) "${n}x$c" else n
                 }
             if (carryText != null) {
-                Text("携带: $carryText",
+                Text("Carry: $carryText",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (lootText != null) {
-                Text("背包: $lootText",
+                Text("Backpack: $lootText",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary)
             }
@@ -294,11 +294,11 @@ private fun buildCard(index: Int, lines: List<String>): EventCardData {
     val firstLine = lines.first()
     val type = when {
         firstLine.startsWith("==") -> CardType.FLOOR_TITLE
-        firstLine.contains("GUARDED") || firstLine.contains("守护") -> CardType.GUARDED
-        firstLine.contains("PUZZLE") || firstLine.contains("解谜") -> CardType.PUZZLE
+        firstLine.contains("GUARDED") -> CardType.GUARDED
+        firstLine.contains("PUZZLE") -> CardType.PUZZLE
         firstLine.contains("BOSS") || firstLine.contains("ENCOUNTER") -> CardType.COMBAT
-        firstLine.contains("LOOT") || firstLine.contains("宝箱") -> CardType.LOOT
-        firstLine.contains("TRAP") || firstLine.contains("陷阱") -> CardType.TRAP
+        firstLine.contains("LOOT") -> CardType.LOOT
+        firstLine.contains("TRAP") -> CardType.TRAP
         firstLine.contains(">>") || firstLine.contains("STAIRS") -> CardType.STAIR
         firstLine.startsWith("[") -> CardType.ROOM
         else -> CardType.SYSTEM
@@ -404,15 +404,12 @@ private fun EventDetailDialog(card: EventCardData, onDismiss: () -> Unit) {
                 ) {
                     items(card.lines) { line ->
                         val baseColor = when {
-                            line.contains("Victory") || line.contains("胜利") -> MaterialTheme.colorScheme.primary
-                            line.contains("Defeat") || line.contains("败北") || line.contains("wiped") -> MaterialTheme.colorScheme.error
-                            line.contains("Loot") || line.contains("Obtained") || line.contains("获得") -> MaterialTheme.colorScheme.tertiary
+                            line.contains("Victory") -> MaterialTheme.colorScheme.primary
+                            line.contains("Defeat") || line.contains("Injured") || line.contains("wiped") -> MaterialTheme.colorScheme.error
+                            line.contains("Loot") || line.contains("Obtained") -> MaterialTheme.colorScheme.tertiary
                             line.contains("casts") -> MaterialTheme.colorScheme.primary
-                            line.contains("uses") -> MaterialTheme.colorScheme.secondary
-                            line.contains("暴击") -> MaterialTheme.colorScheme.error
-                            line.contains("闪避") -> MaterialTheme.colorScheme.tertiary
-                            line.contains("吸血") || line.contains("特质") -> MaterialTheme.colorScheme.primary
-                            line.contains("Round") || line.contains("回合") -> MaterialTheme.colorScheme.secondary
+                            line.contains("used") || line.contains("uses") -> MaterialTheme.colorScheme.secondary
+                            line.contains("Round") -> MaterialTheme.colorScheme.secondary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                         Text(

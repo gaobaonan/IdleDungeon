@@ -27,5 +27,5 @@ object Route {
     // 地下城相关 (从城镇大门进入)
     const val DUNGEON = "dungeon"
     const val PARTY_SETUP = "party_setup"
-    const val TACTIC_SETUP = "tactic_setup"
+    const val STRATEGY_SETUP = "strategy_setup"
 }

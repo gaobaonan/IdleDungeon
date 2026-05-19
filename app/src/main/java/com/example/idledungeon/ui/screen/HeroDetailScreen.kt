@@ -22,7 +22,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.idledungeon.data.SpellRegistry
-import com.example.idledungeon.data.TraitRegistry
 import com.example.idledungeon.model.*
 import com.example.idledungeon.ui.component.HeroAvatar
 
@@ -129,7 +128,7 @@ fun HeroDetailScreen(
                                     onClick = { onPortraitSelected(null) },
                                     contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                                 ) {
-                                    Text("移除头像", style = MaterialTheme.typography.labelSmall,
+                                    Text("Remove portrait", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.error)
                                 }
                             }
@@ -156,7 +155,7 @@ fun HeroDetailScreen(
                     if (hero.unspentStatPoints > 0 || hero.unspentSkillPoints > 0) {
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Unspent / 未分配: ${hero.unspentStatPoints} stat pts, ${hero.unspentSkillPoints} skill pts",
+                            "Unspent: ${hero.unspentStatPoints} stat pts, ${hero.unspentSkillPoints} skill pts",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -167,7 +166,7 @@ fun HeroDetailScreen(
             // ── 四维属性 (基础 + 装备加成) + 分配按钮 ──
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Stats / 属性", style = MaterialTheme.typography.titleSmall)
+                    Text("Stats", style = MaterialTheme.typography.titleSmall)
                     val equipBonuses = mutableMapOf<StatType, Int>()
                     hero.equipment.values.forEach { equip ->
                         equip.statBonuses.forEach { (stat, v) ->
@@ -210,7 +209,7 @@ fun HeroDetailScreen(
                             modifier = Modifier.weight(1f)
                         ) { Text("+20 MP") }
                     }
-                    Text("Remaining / 剩余: ${hero.unspentStatPoints} pts",
+                    Text("Remaining: ${hero.unspentStatPoints} pts",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (hasPoints) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -220,7 +219,7 @@ fun HeroDetailScreen(
             // ── 装备栏 ──
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Equipment / 装备", style = MaterialTheme.typography.titleSmall)
+                    Text("Equipment", style = MaterialTheme.typography.titleSmall)
                     EquipSlot.entries.forEach { slot ->
                         val item = hero.equipment[slot]
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -237,13 +236,13 @@ fun HeroDetailScreen(
                                             color = rarityColor(item.rarity))
                                     }
                                     TextButton(onClick = { onUnequip(slot) }) {
-                                        Text("卸下",
+                                        Text("Unequip",
                                             color = MaterialTheme.colorScheme.error,
                                             style = MaterialTheme.typography.labelSmall)
                                     }
                                 } else {
                                     TextButton(onClick = { selectedSlot = slot }) {
-                                        Text("(Empty / 空)")
+                                        Text("(Empty)")
                                     }
                                 }
                             }
@@ -274,7 +273,7 @@ fun HeroDetailScreen(
             if (hero.proficiencyXp.isNotEmpty()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Proficiency / 熟练度", style = MaterialTheme.typography.titleSmall)
+                        Text("Proficiency", style = MaterialTheme.typography.titleSmall)
                         Spacer(Modifier.height(4.dp))
                         hero.proficiencyXp.forEach { (type, xp) ->
                             ProficiencyRow(type, xp, hero.proficiencyLevel(type))
@@ -298,7 +297,7 @@ fun HeroDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Skill Tree / 技能树", style = MaterialTheme.typography.titleSmall)
+                            Text("Skill Tree", style = MaterialTheme.typography.titleSmall)
                             Text("SP: ${hero.unspentSkillPoints}",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary)
@@ -306,7 +305,7 @@ fun HeroDetailScreen(
 
                         if (magicSpells.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            Text("Magic / 魔法 (INT)", style = MaterialTheme.typography.titleSmall)
+                            Text("Magic (INT)", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             magicSpells.forEach { spell ->
                                 SpellRow(spell, hero.level, hero.unspentSkillPoints) {
@@ -316,7 +315,7 @@ fun HeroDetailScreen(
                         }
                         if (miracleSpells.isNotEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            Text("Miracles / 奇迹 (FTH)", style = MaterialTheme.typography.titleSmall)
+                            Text("Miracles (FTH)", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(4.dp))
                             miracleSpells.forEach { spell ->
                                 SpellRow(spell, hero.level, hero.unspentSkillPoints) {
@@ -332,7 +331,7 @@ fun HeroDetailScreen(
                             val learnable = SpellRegistry.byType(type).filter { it.id !in ownedIds }
                             if (learnable.isNotEmpty()) {
                                 Spacer(Modifier.height(12.dp))
-                                Text("可学习 / Learnable", style = MaterialTheme.typography.titleSmall)
+                                Text("Learnable", style = MaterialTheme.typography.titleSmall)
                                 Spacer(Modifier.height(4.dp))
                                 learnable.forEach { tmpl ->
                                     LearnableSpellRow(
@@ -346,31 +345,6 @@ fun HeroDetailScreen(
                     }
                 }
             }
-
-            // ── 特质 ──
-            if (hero.traits.isNotEmpty()) {
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Traits / 特质", style = MaterialTheme.typography.titleSmall)
-                        Spacer(Modifier.height(4.dp))
-                        hero.traits.forEach { tid ->
-                            val tmpl = TraitRegistry.get(tid)
-                            val color = if (tmpl.isPositive) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.error
-                            val sign = if (tmpl.isPositive) "+" else "-"
-                            Row(modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text(
-                                    "$sign ${tmpl.name}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = color
-                                )
-                                Text(tmpl.description, style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -379,12 +353,12 @@ fun HeroDetailScreen(
         var input by remember { mutableStateOf(hero.name) }
         AlertDialog(
             onDismissRequest = { renameDialogOpen = false },
-            title = { Text("重命名英雄") },
+            title = { Text("Rename Hero") },
             text = {
                 OutlinedTextField(
                     value = input,
                     onValueChange = { input = it.take(20) },
-                    label = { Text("名字 (最多 20 字)") },
+                    label = { Text("Name (max 20 chars)") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
                 )
@@ -396,10 +370,10 @@ fun HeroDetailScreen(
                         renameDialogOpen = false
                     },
                     enabled = input.isNotBlank() && input.trim() != hero.name
-                ) { Text("确认") }
+                ) { Text("Confirm") }
             },
             dismissButton = {
-                TextButton(onClick = { renameDialogOpen = false }) { Text("取消") }
+                TextButton(onClick = { renameDialogOpen = false }) { Text("Cancel") }
             }
         )
     }
@@ -435,15 +409,15 @@ private fun EquipmentPickerDialog(
         onDismissRequest = onDismiss,
         title = {
             val slotName = when (slot) {
-                EquipSlot.WEAPON -> "Weapon / 武器"
-                EquipSlot.ARMOR -> "Armor / 护甲"
-                EquipSlot.ACCESSORY -> "Accessory / 饰品"
+                EquipSlot.WEAPON -> "Weapon"
+                EquipSlot.ARMOR -> "Armor"
+                EquipSlot.ACCESSORY -> "Accessory"
             }
             Text("Select $slotName")
         },
         text = {
             if (candidates.isEmpty()) {
-                Text("No available equipment in inventory.\n仓库中没有可装备的物品。")
+                Text("No available equipment in inventory.")
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(candidates) { item ->
@@ -454,7 +428,7 @@ private fun EquipmentPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel / 取消") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
@@ -501,7 +475,7 @@ private fun EquipCandidateCard(
             if (requiredClass != null) {
                 val classOk = requiredClass == hero.heroClass
                 Text(
-                    "Class / 职业限定: ${requiredClass.name}${if (classOk) " OK" else " X"}",
+                    "Class: ${requiredClass.name}${if (classOk) " OK" else " X"}",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (classOk) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.error
@@ -515,7 +489,7 @@ private fun EquipCandidateCard(
                     "${stat.name} $heroVal/$req${if (ok) " OK" else " X"}"
                 }
                 Text(
-                    "Require / 需求: $reqText",
+                    "Require: $reqText",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (meetsReq) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.error
@@ -529,9 +503,9 @@ private fun EquipCandidateCard(
             ) {
                 val classMismatch = requiredClass != null && requiredClass != hero.heroClass
                 Text(when {
-                    meetsReq -> "Equip / 装备"
-                    classMismatch -> "Wrong class / 职业不符"
-                    else -> "Requirements not met / 属性不足"
+                    meetsReq -> "Equip"
+                    classMismatch -> "Wrong class"
+                    else -> "Requirements not met"
                 })
             }
         }
@@ -580,7 +554,7 @@ private fun LearnableSpellRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(firstTier.name, style = MaterialTheme.typography.bodyMedium)
             Text(
-                "${template.target.name}  威力 ${firstTier.power}  MP ${firstTier.mpCost}",
+                "${template.target.name}  Power ${firstTier.power}  MP ${firstTier.mpCost}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -591,7 +565,7 @@ private fun LearnableSpellRow(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
             modifier = Modifier.height(28.dp)
         ) {
-            Text("学习 (1 SP)", style = MaterialTheme.typography.labelSmall)
+            Text("Learn (1 SP)", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -608,18 +582,18 @@ private fun SpellRow(
 
     // 功能类型标签 & 颜色
     val (targetLabel, targetColor) = when (template.target) {
-        SpellTarget.DAMAGE_SINGLE -> "Single DMG / 单体伤害" to MaterialTheme.colorScheme.error
-        SpellTarget.DAMAGE_AOE    -> "AOE DMG / 群体伤害" to MaterialTheme.colorScheme.error
-        SpellTarget.HEAL_SINGLE   -> "Single Heal / 单体治疗" to MaterialTheme.colorScheme.primary
-        SpellTarget.HEAL_AOE      -> "AOE Heal / 群体治疗" to MaterialTheme.colorScheme.primary
+        SpellTarget.DAMAGE_SINGLE -> "Single DMG" to MaterialTheme.colorScheme.error
+        SpellTarget.DAMAGE_AOE    -> "AOE DMG" to MaterialTheme.colorScheme.error
+        SpellTarget.HEAL_SINGLE   -> "Single Heal" to MaterialTheme.colorScheme.primary
+        SpellTarget.HEAL_AOE      -> "AOE Heal" to MaterialTheme.colorScheme.primary
         SpellTarget.BUFF_SINGLE   -> "Buff ${template.affectedStat?.name ?: ""}" to MaterialTheme.colorScheme.tertiary
         SpellTarget.DEBUFF_SINGLE -> "Debuff ${template.affectedStat?.name ?: ""}" to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     // 数值标签根据类型变化
     val powerLabel = when (template.target) {
-        SpellTarget.DAMAGE_SINGLE, SpellTarget.DAMAGE_AOE -> "DMG / 伤害"
-        SpellTarget.HEAL_SINGLE, SpellTarget.HEAL_AOE -> "Heal / 治疗量"
+        SpellTarget.DAMAGE_SINGLE, SpellTarget.DAMAGE_AOE -> "DMG"
+        SpellTarget.HEAL_SINGLE, SpellTarget.HEAL_AOE -> "Heal"
         SpellTarget.BUFF_SINGLE -> "+${template.affectedStat?.name ?: ""}"
         SpellTarget.DEBUFF_SINGLE -> "-${template.affectedStat?.name ?: ""}"
     }
@@ -658,7 +632,7 @@ private fun SpellRow(
             val canUpgrade = levelOk && unspentSkillPoints >= 1
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "Next: $nextName (需 Lv.$reqLv${if (!levelOk) " — 等级不足" else ""})",
+                    "Next: $nextName (req Lv.$reqLv${if (!levelOk) " — level too low" else ""})",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (levelOk) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.outline,
@@ -670,11 +644,11 @@ private fun SpellRow(
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                     modifier = Modifier.height(28.dp)
                 ) {
-                    Text("升级 (1 SP)", style = MaterialTheme.typography.labelSmall)
+                    Text("Upgrade (1 SP)", style = MaterialTheme.typography.labelSmall)
                 }
             }
         } else {
-            Text("MAX / 已满阶", style = MaterialTheme.typography.labelSmall,
+            Text("MAX", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
         }
     }
