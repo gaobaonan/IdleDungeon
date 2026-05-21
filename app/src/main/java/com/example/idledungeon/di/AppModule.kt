@@ -1,6 +1,7 @@
 package com.example.idledungeon.di
 
 import android.content.Context
+import com.example.idledungeon.data.RoomSaveRepository
 import com.example.idledungeon.data.SaveRepository
 import com.example.idledungeon.data.database.GameDatabase
 import dagger.Module
@@ -20,5 +21,5 @@ object AppModule {
 
     @Provides @Singleton
     fun provideSaveRepository(db: GameDatabase): SaveRepository =
-        SaveRepository(db)                              // db 参数会由 Hilt 自动用上面那个 Provider 注入
+        RoomSaveRepository(db)                          // 返回类型是接口 SaveRepository, 内部 new 的是 Room 实现; 换实现不影响调用方
 }

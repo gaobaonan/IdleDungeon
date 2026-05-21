@@ -10,7 +10,21 @@ import com.example.idledungeon.viewmodel.GameUiState
 import com.example.idledungeon.viewmodel.GameViewModel
 
 /**
- * 高层存档仓库 — 把 [GameUiState] 拆成 Room 实体写入, 或反过来从 DB 拼回 [GameUiState].
+ * 存档仓库的抽象接口 — ViewModel 与具体存储实现解耦.
+ *
+ * 让 Repository 是接口而非具体类的三个好处:
+ *   1. **可测试**: ViewModel 单测时塞 FakeSaveRepository, 不需要真 Room/Android
+ *   2. **可替换**: 将来加云存档只需写一个新实现, 上层零改动
+ *   3. **依赖反转 (DIP)**: ViewModel 依赖抽象, 不依赖 Room/具体存储方案
+ */
+interface SaveRepository {
+    suspend fun load(): GameUiState?
+    suspend fun save(state: GameUiState)
+    suspend fun clear()
+}
+
+/**
+ * Room 实现 — 把 [GameUiState] 拆成 Room 实体写入, 或反过来从 DB 拼回 [GameUiState].
  *
  * 设计取舍:
  *   - 英雄 (heroes) 表: 一行一英雄, 便于将来按 id 查/改单条
@@ -20,7 +34,7 @@ import com.example.idledungeon.viewmodel.GameViewModel
  *   - 装备只存 ID (Map<EquipSlot, String>), 通过 [ItemRegistry] 反查; 仓库
  *     (List<Item>) 同理只存 ID
  */
-class SaveRepository(private val db: GameDatabase) {
+class RoomSaveRepository(private val db: GameDatabase) : SaveRepository {
 
     private val tag = "Save"
 
@@ -32,7 +46,7 @@ class SaveRepository(private val db: GameDatabase) {
      *
      * 任何异常都不会向上抛 — 不能因为存档坏了让 App 启动崩溃.
      */
-    suspend fun load(): GameUiState? {
+    override suspend fun load(): GameUiState? {
         return try {
             val snap = db.snapshotDao().get()
             if (snap == null) {
@@ -96,7 +110,7 @@ class SaveRepository(private val db: GameDatabase) {
     }
 
     /** 写一份完整快照. 英雄表整体替换, snapshot 表 upsert */
-    suspend fun save(state: GameUiState) {
+    override suspend fun save(state: GameUiState) {
         try {
             db.heroDao().replaceAll(state.heroes.map { it.toEntity() })
             db.snapshotDao().upsert(state.toSnapshot())
@@ -108,7 +122,7 @@ class SaveRepository(private val db: GameDatabase) {
     }
 
     /** 抹掉所有数据 — 新游戏前调用. */
-    suspend fun clear() {
+    override suspend fun clear() {
         try {
             db.heroDao().clear()
             db.snapshotDao().clear()

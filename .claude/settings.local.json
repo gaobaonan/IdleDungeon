@@ -49,7 +49,11 @@
       "Bash(./gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.CombatEngineTest\")",
       "Bash(./gradlew.bat :app:testDebugUnitTest)",
       "Bash(awk -F'\"' '{s+=$2} END{print \"skipped=\"s}')",
-      "Bash(./gradlew.bat :app:testDebugUnitTest -q)"
+      "Bash(./gradlew.bat :app:testDebugUnitTest -q)",
+      "Bash(./gradlew.bat :app:compileDebugKotlin :app:testDebugUnitTest)",
+      "Bash(./gradlew.bat :app:compileDebugKotlin :app:testDebugUnitTest -q)",
+      "Bash(./gradlew.bat :app:assembleDebug :app:testDebugUnitTest -q)",
+      "Bash(./gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.viewmodel.GameViewModelTest\")"
     ]
   }
 }

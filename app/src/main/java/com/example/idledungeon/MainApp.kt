@@ -48,7 +48,7 @@ private fun NavController.popBackStackSafe(): Boolean {
 fun MainApp() {
     val navController = rememberNavController()
     val vm: GameViewModel = hiltViewModel()
-    val state by vm.uiState
+    val state by vm.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
