@@ -36,7 +36,20 @@
       "Bash(./gradlew.bat compileDebugKotlin testDebugUnitTest -q)",
       "Bash(awk -F'\"' '{t+=$2} END{print \"total tests=\"t}')",
       "Bash(awk -F'\"' '{f+=$2} END{print \"failures=\"f}')",
-      "Bash(awk -F'\"' '{e+=$2} END{print \"errors=\"e}')"
+      "Bash(awk -F'\"' '{e+=$2} END{print \"errors=\"e}')",
+      "Bash(./gradlew.bat :app:assembleDebug)",
+      "WebSearch",
+      "Bash(./gradlew.bat testDebugUnitTest -q)",
+      "Bash(awk -F'\"' '{t+=$2} END{print \"tests=\"t}')",
+      "Bash(./gradlew.bat :app:assembleDebug -q)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(./gradlew.bat :app:compileDebugKotlin -q)",
+      "Bash(sed -n '1,15p' app/src/main/java/com/example/idledungeon/engine/ExplorationEngine.kt)",
+      "Bash(sed -n '187,212p' app/src/main/java/com/example/idledungeon/viewmodel/GameViewModel.kt)",
+      "Bash(./gradlew.bat :app:testDebugUnitTest --tests \"com.example.idledungeon.engine.CombatEngineTest\")",
+      "Bash(./gradlew.bat :app:testDebugUnitTest)",
+      "Bash(awk -F'\"' '{s+=$2} END{print \"skipped=\"s}')",
+      "Bash(./gradlew.bat :app:testDebugUnitTest -q)"
     ]
   }
 }

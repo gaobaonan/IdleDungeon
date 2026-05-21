@@ -16,7 +16,9 @@ import com.example.idledungeon.util.L
  */
 @Database(
     entities = [HeroEntity::class, SnapshotEntity::class],
-    version = 1,
+    // 每次改动持久化字段 (HeroEntity / SnapshotEntity / Converters 涉及的类型) 都必须 +1,
+    // 否则 Room schema 指纹不匹配会直接抛 IllegalStateException (fallback 只在版本变化时才触发).
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -40,7 +42,7 @@ abstract class GameDatabase : RoomDatabase() {
                     .build()
                     .also {
                         INSTANCE = it
-                        L.i("DB", "GameDatabase 实例已创建 (path=idle_dungeon.db, version=1)")
+                        L.i("DB", "GameDatabase 实例已创建 (path=idle_dungeon.db)")
                     }
             }
         }

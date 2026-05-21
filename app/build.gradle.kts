@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -61,6 +62,10 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    // Hilt (依赖注入 — KSP 生成依赖图; navigation-compose 提供 hiltViewModel())
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
     // Gson (Room TypeConverter 用于嵌套 Map/List)
     implementation(libs.gson)
     // Coil (图片加载)

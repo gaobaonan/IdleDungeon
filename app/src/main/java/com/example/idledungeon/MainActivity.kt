@@ -12,7 +12,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.idledungeon.ui.theme.IdleDungeonTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint          //Hilt加入注入逻辑
 class MainActivity : ComponentActivity() {
 
     private val notificationPermissionLauncher = registerForActivityResult(

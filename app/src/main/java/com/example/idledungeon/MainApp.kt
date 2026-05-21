@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -47,8 +47,8 @@ private fun NavController.popBackStackSafe(): Boolean {
 @Composable
 fun MainApp() {
     val navController = rememberNavController()
-    val vm: GameViewModel = viewModel()
-    val state by vm.uiState.collectAsState()
+    val vm: GameViewModel = hiltViewModel()
+    val state by vm.uiState
     val snackbarHostState = remember { SnackbarHostState() }
 
     val lifecycleOwner = LocalLifecycleOwner.current

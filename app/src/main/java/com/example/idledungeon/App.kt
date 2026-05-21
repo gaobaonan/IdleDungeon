@@ -7,12 +7,14 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.example.idledungeon.notification.ExpeditionEventBus
 import com.example.idledungeon.notification.NotificationHelper
 import com.example.idledungeon.util.L
+import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+@HiltAndroidApp     //Hilt注解
 class App : Application(), DefaultLifecycleObserver {
 
     @Volatile private var inBackground = false

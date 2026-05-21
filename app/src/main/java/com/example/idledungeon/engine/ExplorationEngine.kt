@@ -9,6 +9,7 @@ import com.example.idledungeon.notification.ExpeditionEventBus
 import com.example.idledungeon.util.L
 import com.example.idledungeon.viewmodel.advanceQuestsIfNeeded
 import com.example.idledungeon.viewmodel.GameUiState
+import javax.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -60,11 +61,11 @@ import kotlinx.coroutines.flow.update
  *   - HP=0 是"重伤 (injured)"不是阵亡, 战后队伍归城, HP 会保留到下次出战开始才回满
  *   - 任何状态变更都通过 stateFlow.update {} 原子更新, 不直接持引用修改 Hero
  */
-class ExplorationEngine {
+class ExplorationEngine @Inject constructor() {
 
     companion object {
         /** 每步基础间隔 — 让 UI 能看清楚动画, 太快用户跟不上 */
-        private const val BASE_INTERVAL_MS = 600L
+        private const val BASE_INTERVAL_MS = 1200L
 
         // ─── 补给消耗表 (走一格 1 点; 各事件在 1 基础上再叠加) ───
         private const val SUPPLY_STEP = 1                  // 默认: 走一格 = 1 点补给
@@ -133,7 +134,7 @@ class ExplorationEngine {
             val cx = s.posX; val cy = s.posY
 
             // ── BFS 找下一格 ──
-            // 没有路可走 → 主动撤退 (理论上 BFS 至少能回头, 但如果回头格也走过了就回不去)
+            // 没有路可走（几乎不存在） → 主动撤退
             val next = bfsNextStep(currentFloor, cx, cy, s.secondaryStrategy) ?: run {
                 s = s.appendLog("")
                 s = s.appendLog("No path forward, retreating...")
@@ -179,13 +180,9 @@ class ExplorationEngine {
             val log = mutableListOf<String>()
 
             // ── 处理本格事件 ──
-            if (!hasEvent) {
-                // 空格子 / 已清空的房间: 只在第一次进入时打个"平安无事"
-                if (isRoom && node.event == NodeEvent.NONE && firstEntry) {
-                    log.add("")
-                    log.add("[ $roomName ] Entered — nothing here")
-                }
-            } else {
+            // 注: 不存在 "空房间" 路径 — 生成器给每个非特殊房间强制刷事件 (ENCOUNTER/GUARDED_LOOT/TRAP/PUZZLE);
+            // 事件解决后房间变 NONE, 但此时已 visited, 再路过也无需写日志.
+            if (hasEvent) {
                 val header = if (roomName.isNotEmpty()) "[ $roomName ]" else "[Corridor]"
 
                 when (node.event) {
@@ -461,7 +458,7 @@ class ExplorationEngine {
         val carriedItems = session.carriedItems.toMutableList()
         val log = mutableListOf<String>()
 
-        var safety = 0
+        var safety = 0          //保险
         while (safety++ < 30) {
             var anyAction = false
 
@@ -643,7 +640,7 @@ class ExplorationEngine {
         val hasHealSpell = heroes.any { hero ->
             val canCast = hero.heroClass == HeroClass.CLERIC
             canCast && hero.spells.any { spell ->
-                val t = com.example.idledungeon.data.SpellRegistry.get(spell.templateId)
+                val t = SpellRegistry.get(spell.templateId)
                 (t.target == SpellTarget.HEAL_SINGLE || t.target == SpellTarget.HEAL_AOE) &&
                     hero.currentMp >= t.tiers[spell.currentTier - 1].mpCost
             }
@@ -659,7 +656,7 @@ class ExplorationEngine {
             StrategyType.SAFE -> anyBelow50                                // 有人 <50% 撤
             StrategyType.BALANCED -> anyBelow20 || totalHpRatio < 0.5f     // 有人 <20% 或全队均血 <50% 撤
             StrategyType.RISKY -> anyBelow20                               // 有人 <20% 才撤
-            StrategyType.AGGRESSIVE -> false                               // 上面已 return, 这里防御
+            else -> false                                                  // AGGRESSIVE 已在函数开头 return; 这里仅作兜底
         }
     }
 
@@ -743,7 +740,9 @@ class ExplorationEngine {
             SecondaryStrategyType.EXPLORE -> {
                 // 看见楼梯就赶紧下 (除非还有未探索的); 否则探索 > 楼梯 > Boss
                 if (nearestStairs != null && !hasUnexplored) nearestStairs
-                else nearestRoom ?: nearestFrontier ?: nearestStairs ?: nearestBoss
+                // 进入 else 时若 nearestRoom/nearestFrontier 都为 null, 则 hasUnexplored=false,
+                // 再由 else 触发条件反推 nearestStairs 必为 null — 这里不再写 ?: nearestStairs.
+                else nearestRoom ?: nearestFrontier ?: nearestBoss
             }
             SecondaryStrategyType.SCAVENGE -> {
                 // 把所有房间走完再打 Boss, 打完才下楼

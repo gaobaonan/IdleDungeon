@@ -14,6 +14,8 @@ junit = "4.13.2"
 junitVersion = "1.1.5"
 kotlinxCoroutines = "1.7.3"
 espressoCore = "3.5.1"
+hilt = "2.59"
+hiltNavigationCompose = "1.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +41,10 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 # Coil (图片加载 - 英雄头像)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
+# Hilt (依赖注入 — 编译期生成依赖图; hilt-compiler 走 KSP)
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 # Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
@@ -49,3 +55,4 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }

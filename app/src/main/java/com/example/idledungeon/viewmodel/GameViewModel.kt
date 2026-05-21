@@ -1,15 +1,15 @@
 package com.example.idledungeon.viewmodel
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.idledungeon.data.ItemRegistry
 import com.example.idledungeon.data.SaveRepository
 import com.example.idledungeon.data.SpellRegistry
-import com.example.idledungeon.data.database.GameDatabase
 import com.example.idledungeon.engine.ExplorationEngine
 import com.example.idledungeon.model.*
 import com.example.idledungeon.util.L
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -183,8 +183,12 @@ import kotlinx.coroutines.launch
  *   - uiState 任何变化触发一次去抖动 (500ms) 后写库, 避免每次操作都 IO
  *   - 新游戏启动前先清库, 防止旧数据混入
  */
+@HiltViewModel
 @OptIn(FlowPreview::class)                                                  // debounce 还是 preview API, 必须显式同意
-class GameViewModel(application: Application) : AndroidViewModel(application) {
+class GameViewModel @Inject constructor(
+    private val saveRepo: SaveRepository,                               // Hilt 注入: 不再自己 new 数据库, 解耦 + 可测
+    private val explorationEngine: ExplorationEngine                    // Hilt 注入: 测试可塞假引擎验证 ViewModel 而不真探险
+) : ViewModel() {
 
     // _uiState 私有可写, uiState 公开只读. 这是 Kotlin 里"封装"StateFlow 的标准写法.
     private val _uiState = MutableStateFlow(GameUiState())
@@ -204,11 +208,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         _userMessages.tryEmit(msg)                                          // tryEmit 不阻塞, 适合在普通方法里调
     }
 
-    private val explorationEngine = ExplorationEngine()                     // 探险引擎单例, 装算法逻辑
     private var pendingNewGame = false                                      // 标记"等下要开新游戏", 真重置在 TOWN 显示后
-
-    // SaveRepository 是给 Room 数据库套的高层封装. 这里只在 ViewModel 创建时取一次.
-    private val saveRepo = SaveRepository(GameDatabase.getInstance(application))
 
     // init 块: ViewModel 被 new 出来时立刻执行 (构造函数后).
     init {
