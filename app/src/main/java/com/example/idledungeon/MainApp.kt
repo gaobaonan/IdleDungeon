@@ -54,7 +54,11 @@ fun MainApp() {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_START) vm.checkDailyRefresh()
+            when (event) {
+                Lifecycle.Event.ON_START -> vm.checkDailyRefresh()
+                Lifecycle.Event.ON_STOP -> vm.onAppBackground()     // 退后台: 记录时间戳, 供离线补偿用
+                else -> {}
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

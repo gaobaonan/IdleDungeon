@@ -85,7 +85,12 @@ class ExplorationEngine @Inject constructor() {
      * 这是个挺长的函数 (~350 行), 因为单局冒险流程紧密耦合. 拆分尝试过, 但分多个函数会让
      * state 在协程间传递更难懂 — 现在的写法虽然行数多, 顺读一遍逻辑很清晰.
      */
-    suspend fun run(session: ExpeditionSession, stateFlow: MutableStateFlow<GameUiState>) {
+    suspend fun run(
+        session: ExpeditionSession,
+        stateFlow: MutableStateFlow<GameUiState>,
+        stepDelayEnabled: Boolean = true,       // false = 快进模式 (离线补偿用): 跳过所有 delay, 瞬时跑完
+        maxSteps: Int = Int.MAX_VALUE           // 步数上限; 达到则中断且不收尾, 探险保持进行中, 由调用方续跑
+    ) {
         visitedRooms.clear()
         val state = stateFlow.value
         L.i("Expedition", "start — party=${session.party.size}, supply=${session.currentSupply}, " +
@@ -114,13 +119,16 @@ class ExplorationEngine @Inject constructor() {
             combatLog = listOf(openingLog)          //直接把string扔进list，kotlin小巧思
         )
         stateFlow.update { it.copy(currentFloor = currentFloor, expedition = s) }
-        delay(BASE_INTERVAL_MS)
+        if (stepDelayEnabled) delay(BASE_INTERVAL_MS)
 
         // 记录撤退原因, 结束时一次性 emit Retreated 事件 (用于通知系统)
         var retreatReason: String? = null
+        var stepCount = 0                                       // 已走步数, 用于 maxSteps 上限判断
 
         // ─── 2. 主循环 ───
         while (s.isExploring && s.currentSupply > 0) {          //补给归零自动撤
+            if (stepCount >= maxSteps) break                    // 离线补偿: 步数额度用尽, 中断 (探险不结束)
+            stepCount++
             // ── 撤退判定 ──
             if (shouldRetreat(s, stateFlow)) {
                 s = s.appendLog("")
@@ -418,11 +426,16 @@ class ExplorationEngine @Inject constructor() {
 
             // 走空格快 (1/3 间隔), 触发事件用全速间隔 — 让 UI 节奏有起伏，花里胡哨
             val stepDelay = if (!hasEvent) BASE_INTERVAL_MS / 3 else BASE_INTERVAL_MS
-            delay(stepDelay)
+            if (stepDelayEnabled) delay(stepDelay)
         }
 
         // ─── 3. 收尾阶段 ───
-        if (s.isExploring) s = s.copy(isExploring = false)
+        // 因 maxSteps 中断时 s.isExploring 仍为 true (撤退/补给空/全灭都会先把它置 false).
+        // 这种情况探险尚未结束 —— 不收尾, 直接返回, 由调用方另起 run() 续跑.
+        if (s.isExploring) {
+            L.i("Expedition", "fast-forward 步数上限到达, 探险暂停, 等待续跑")
+            return
+        }
         L.i("Expedition", "expedition end: reason=${retreatReason ?: "normal end"}, layer=${s.currentLayer}, " +
             "loot=${s.backpack.size}")
         ExpeditionEventBus.emit(ExpeditionEvent.Retreated(retreatReason ?: "Expedition ended"))

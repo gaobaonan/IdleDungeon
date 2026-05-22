@@ -18,7 +18,7 @@ import com.example.idledungeon.util.L
     entities = [HeroEntity::class, SnapshotEntity::class],
     // 每次改动持久化字段 (HeroEntity / SnapshotEntity / Converters 涉及的类型) 都必须 +1,
     // 否则 Room schema 指纹不匹配会直接抛 IllegalStateException (fallback 只在版本变化时才触发).
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

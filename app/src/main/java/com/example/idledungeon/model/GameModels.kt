@@ -473,5 +473,8 @@ data class GameState(
      * 下一个招募者要分配的编号; 每次刷新酒馆按此累加.
      * 保证"冒险者 N"的名字跨刷新单调递增, 不会回到 1.
      */
-    val nextRecruitNumber: Int = 1
+    val nextRecruitNumber: Int = 1,
+    // ── 离线补偿 ──
+    /** App 上次活跃的时间戳 (ms). 重新打开时与当前时间比较, 折算探险离线进度. 0 = 从未记录. */
+    val lastActiveAt: Long = 0L
 )

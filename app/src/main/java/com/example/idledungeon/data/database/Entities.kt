@@ -65,6 +65,7 @@ data class SnapshotEntity(
     val lastShopRefreshDayKey: Int,
     val f2ChestPity: Int,
     val nextRecruitNumber: Int,
+    val lastActiveAt: Long,
 
     // ── 仓库 / 队伍 / 战术 ──
     val inventoryItemIds: List<String>,

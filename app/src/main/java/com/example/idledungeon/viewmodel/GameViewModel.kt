@@ -221,6 +221,8 @@ class GameViewModel @Inject constructor(
                 // 商店列表已从 snapshot 还原, 不再无条件 refreshShops().
                 // 跨日的刷新由 App.ON_START → checkDailyRefresh() 自然触发.
                 checkDailyRefresh()
+                // 上次探险若被进程中断, 在此按离开时长折算并快进补偿.
+                checkOfflineCatchUp()
             }
         }
         // 自动保存: state 任何变化 → 去抖动 500ms → 写库.
@@ -268,6 +270,12 @@ class GameViewModel @Inject constructor(
                 type = QuestType.DEFEAT_BOSS, targetFloor = 3
             )
         )
+
+        // ── 离线补偿参数 ──
+        /** 多少真实毫秒折算为探险的 1 步. 调大可让离线节奏接近"每格数分钟"的设计目标. */
+        private const val OFFLINE_MS_PER_STEP = 1200L
+        /** 离线补偿的时长上限 — 防止离开过久导致一次性模拟过多步数 (取 24 小时). */
+        private const val MAX_OFFLINE_MS = 24L * 60 * 60 * 1000
     }
 
     // ─── 游戏存档 ─────────────────────────────────────────
@@ -876,6 +884,65 @@ class GameViewModel @Inject constructor(
                         if (h.id in partyIds) h.copy(status = HeroStatus.IDLE) else h
                     }
                     st.copy(expedition = ended, heroes = resetHeroes)
+                }
+            }
+        }
+    }
+
+    // ─── 离线补偿 (挂机) ─────────────────────────────────────
+
+    /**
+     * App 退到后台时调用 (MainApp 的 ON_STOP). 记录当前时间戳并立即存盘 ——
+     * 进程随后可能被系统回收, 靠这个时间戳在重新打开时折算探险的离线进度.
+     */
+    fun onAppBackground() {
+        if (!_uiState.value.gameState.hasStarted) return
+        _uiState.update {
+            it.copy(gameState = it.gameState.copy(lastActiveAt = System.currentTimeMillis()))
+        }
+        // 不等去抖动, 立即存一次 — debounced autosave 可能来不及在进程被杀前落盘.
+        viewModelScope.launch { saveRepo.save(_uiState.value) }
+    }
+
+    /**
+     * 离线补偿 —— 重新打开 App 时调 (init 加载存档后).
+     * 若上次有一场探险被进程中断 (expedition.isExploring=true 但已无协程在跑),
+     * 按"离开时长 ÷ 每步耗时"折算步数, 用快进模式 (无 delay) 把这些步数补上;
+     * 若步数额度用尽探险仍未结束, 续起前台 run() 让其在玩家眼前继续.
+     */
+    private fun checkOfflineCatchUp() {
+        val state = _uiState.value
+        val session = state.expedition
+        if (session == null || !session.isExploring) return     // 不在探险中, 无需补偿
+        val lastActive = state.gameState.lastActiveAt
+        if (lastActive == 0L) return                             // 没有时间戳记录
+        val elapsed = (System.currentTimeMillis() - lastActive).coerceAtMost(MAX_OFFLINE_MS)
+        val steps = (elapsed / OFFLINE_MS_PER_STEP).toInt()
+        if (steps <= 0) return                                   // 离开太短, 不补偿
+
+        viewModelScope.launch {
+            L.i("VM", "offline catch-up: away ${elapsed / 1000}s → $steps step(s)")
+            val roomsBefore = _uiState.value.gameState.roomsExplored
+            // 快进: 关闭 delay, 限制步数上限
+            explorationEngine.run(session, _uiState, stepDelayEnabled = false, maxSteps = steps)
+            val after = _uiState.value
+            val gained = after.gameState.roomsExplored - roomsBefore
+            val stillExploring = after.expedition?.isExploring == true
+            // 消费掉这段离线时长, 防止极端情况下重复补偿
+            _uiState.update {
+                it.copy(gameState = it.gameState.copy(lastActiveAt = System.currentTimeMillis()))
+            }
+            toast("Offline", if (stillExploring)
+                "Welcome back — explored $gained room(s) while away, expedition continues"
+            else
+                "Welcome back — expedition finished while away, explored $gained room(s)")
+            // 步数额度用尽但探险未结束 → 续起前台 run() 让它继续
+            if (stillExploring) {
+                val ongoing = after.expedition ?: return@launch
+                try {
+                    explorationEngine.run(ongoing, _uiState)
+                } catch (e: Exception) {
+                    L.e("VM", "offline catch-up: resume run() failed", e)
                 }
             }
         }

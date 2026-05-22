@@ -70,7 +70,8 @@ class RoomSaveRepository(private val db: GameDatabase) : SaveRepository {
                 monsterKills = snap.monsterKills,
                 lastShopRefreshDayKey = snap.lastShopRefreshDayKey,
                 f2ChestPity = snap.f2ChestPity,
-                nextRecruitNumber = snap.nextRecruitNumber
+                nextRecruitNumber = snap.nextRecruitNumber,
+                lastActiveAt = snap.lastActiveAt
             )
 
             // 仓库道具 ID → 实体 Item; 注册表里查不到的就跳过 (防御性: 万一以后删过物品)
@@ -195,6 +196,7 @@ class RoomSaveRepository(private val db: GameDatabase) : SaveRepository {
         lastShopRefreshDayKey = gameState.lastShopRefreshDayKey,
         f2ChestPity = gameState.f2ChestPity,
         nextRecruitNumber = gameState.nextRecruitNumber,
+        lastActiveAt = gameState.lastActiveAt,
         inventoryItemIds = inventory.map { it.id },
         partySlots = partySlots,
         selectedStrategy = selectedStrategy,
