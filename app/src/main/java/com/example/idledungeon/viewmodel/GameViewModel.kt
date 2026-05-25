@@ -900,7 +900,7 @@ class GameViewModel @Inject constructor(
         _uiState.update {
             it.copy(gameState = it.gameState.copy(lastActiveAt = System.currentTimeMillis()))
         }
-        // 不等去抖动, 立即存一次 — debounced autosave 可能来不及在进程被杀前落盘.
+        // 不等去抖动, 立即存一次
         viewModelScope.launch { saveRepo.save(_uiState.value) }
     }
 
