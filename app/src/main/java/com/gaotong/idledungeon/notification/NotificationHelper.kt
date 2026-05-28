@@ -1,0 +1,109 @@
+package com.gaotong.idledungeon.notification
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import com.gaotong.idledungeon.MainActivity
+import com.gaotong.idledungeon.R
+import com.gaotong.idledungeon.util.L
+
+/**
+ * 探险事件后台通知工具.
+ * - createChannel: App 启动时调用一次
+ * - notify: 收到事件且 App 在后台时调用
+ */
+object NotificationHelper {
+
+    const val CHANNEL_ID = "expedition_events"
+    private const val CHANNEL_NAME = "Expedition Events"
+
+    // 不同事件用不同通知 ID, 避免互相覆盖
+    private const val NOTIF_ID_BOSS = 1001
+    private const val NOTIF_ID_FLOOR = 1002
+    private const val NOTIF_ID_RETREAT = 1003
+
+    /** 注册通知 Channel (Android 8+ 必需). 重复创建无副作用. */
+    fun createChannel(context: Context) {
+        try {
+            val mgr = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                CHANNEL_ID, CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Boss defeated / floor change / party retreat"
+            }
+            mgr.createNotificationChannel(channel)
+            L.i("Notif", "notification channel '$CHANNEL_ID' registered")
+        } catch (e: Exception) {
+            L.e("Notif", "failed to register notification channel", e)
+        }
+    }
+
+    /** 投递事件通知. App 在前台时不应调用 (UI 已展示) */
+    @SuppressLint("MissingPermission")  // 权限已在 hasPostPermission 里检查
+    fun notify(context: Context, event: ExpeditionEvent) {
+        if (!hasPostPermission(context)) {
+            L.w("Notif", "POST_NOTIFICATIONS not granted, skipping event: $event")
+            return  // Android 13+ 用户拒绝过就静默跳过
+        }
+
+        val (title, text, id) = when (event) {
+            is ExpeditionEvent.BossDefeated -> Triple(
+                "Boss Defeated!",
+                "${event.bossName} fell on floor ${event.layer}",
+                NOTIF_ID_BOSS
+            )
+            is ExpeditionEvent.FloorChanged -> Triple(
+                "Floor Changed",
+                "Party descended to floor ${event.newLayer}",
+                NOTIF_ID_FLOOR
+            )
+            is ExpeditionEvent.Retreated -> Triple(
+                "Party Retreated",
+                event.reason,
+                NOTIF_ID_RETREAT
+            )
+        }
+
+        try {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pi = PendingIntent.getActivity(
+                context, id, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+
+            NotificationManagerCompat.from(context).notify(id, notif)
+            L.i("Notif", "delivered: '$title' — $text (id=$id)")
+        } catch (e: Exception) {
+            L.e("Notif", "failed to deliver notification (event=$event)", e)
+        }
+    }
+
+    private fun hasPostPermission(context: Context): Boolean {
+        // Android 13 (API 33) 之前不需要运行时权限
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+}

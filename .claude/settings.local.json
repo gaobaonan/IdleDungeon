@@ -62,7 +62,9 @@
       "Bash(grep -v \"^$\")",
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gao\\\\Desktop\\\\\" | Where-Object { $_.Name -match \"szak\" } | Select-Object FullName)",
       "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"$env:TEMP\\\\szak.docx\"\\); $zip.Entries | Select-Object FullName, Length | Format-Table -AutoSize; $zip.Dispose\\(\\))",
-      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"$env:TEMP\\\\szak.docx\"\\); $entry = $zip.GetEntry\\(\"word/document.xml\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $xml = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); 'comments tag: ' + \\([regex]::Matches\\($xml, '<w:comment[ >]'\\).Count\\); 'ins tag: ' + \\([regex]::Matches\\($xml, '<w:ins '\\).Count\\); 'del tag: ' + \\([regex]::Matches\\($xml, '<w:del '\\).Count\\); 'commentReference: ' + \\([regex]::Matches\\($xml, 'commentReference'\\).Count\\))"
+      "PowerShell(Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\(\"$env:TEMP\\\\szak.docx\"\\); $entry = $zip.GetEntry\\(\"word/document.xml\"\\); $reader = New-Object System.IO.StreamReader\\($entry.Open\\(\\)\\); $xml = $reader.ReadToEnd\\(\\); $reader.Close\\(\\); $zip.Dispose\\(\\); 'comments tag: ' + \\([regex]::Matches\\($xml, '<w:comment[ >]'\\).Count\\); 'ins tag: ' + \\([regex]::Matches\\($xml, '<w:ins '\\).Count\\); 'del tag: ' + \\([regex]::Matches\\($xml, '<w:del '\\).Count\\); 'commentReference: ' + \\([regex]::Matches\\($xml, 'commentReference'\\).Count\\))",
+      "Bash(mkdir -p /mnt/d/StudioProjects/IdleDungeon/app/src/test/java/com/gaotong/idledungeon/integration)",
+      "Read(//mnt/d/StudioProjects/IdleDungeon/app/src/test/java/com/gaotong/**)"
     ]
   }
 }

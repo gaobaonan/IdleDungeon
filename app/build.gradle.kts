@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.idledungeon"
+    namespace = "com.gaotong.idledungeon"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -14,7 +14,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.idledungeon"
+        applicationId = "com.gaotong.idledungeon"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
